@@ -14,11 +14,6 @@ Ouvrir ensuite :
 http://localhost:8000/login.html
 ```
 
-## Compte test
-
-- Utilisateur : `test`
-- Mot de passe : `test`
-
 ## Comportement attendu
 
 - La page d’accueil `index.html` est publique.
