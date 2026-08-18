@@ -1165,3 +1165,6 @@ body[data-page="groups"] .page-title h1 {
   .save-indicator,
   .logout-save-confirmation { display: none !important; }
 }
+
+/* Création de compte */
+.header-account-actions{display:flex;align-items:center;gap:10px}.account-switch{text-align:center;color:#667085;margin:18px 0 0}.account-switch a{color:#2f7d4a;font-weight:900}.signup-success{color:#237a3b;background:#eaf8e8;border:1px solid #bfe7b6;border-radius:14px;padding:11px 13px;font-weight:800}.login-form button:disabled{opacity:.65;cursor:wait}@media(max-width:760px){.header-account-actions{width:100%;flex-wrap:wrap}}

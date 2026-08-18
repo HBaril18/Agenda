@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlanifProf | Créer un compte</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-body">
+  <main class="login-shell">
+    <section class="login-card">
+      <a class="brand login-brand" href="index.html"><span>✦</span> PlanifProf</a>
+      <p class="eyebrow">Nouveau compte</p>
+      <h1>Créer mon espace enseignant</h1>
+      <p class="muted">Vos horaires, groupes, élèves et évaluations seront associés uniquement à votre compte.</p>
+      <form id="signupForm" class="login-form">
+        <label>Nom affiché<input id="displayName" autocomplete="name" placeholder="Votre nom" required></label>
+        <label>Courriel<input id="signupEmail" type="email" autocomplete="email" placeholder="nom@ecole.ca" required></label>
+        <label>Mot de passe<input id="signupPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Minimum 8 caractères" required></label>
+        <label>Confirmer le mot de passe<input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Répétez le mot de passe" required></label>
+        <button id="signupButton" class="btn full-width" type="submit">Créer mon compte</button>
+        <p id="signupMessage" class="login-error" role="alert"></p>
+      </form>
+      <p class="account-switch">Déjà un compte? <a href="login.html">Se connecter</a></p>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script>
+    const form = document.getElementById('signupForm');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = document.getElementById('signupMessage');
+      const button = document.getElementById('signupButton');
+      message.className = 'login-error';
+      message.textContent = '';
+      if (!window.PlanifProfSupabase) {
+        message.textContent = 'Supabase n’est pas configuré.';
+        return;
+      }
+      const password = document.getElementById('signupPassword').value;
+      const confirmation = document.getElementById('signupPasswordConfirm').value;
+      if (password !== confirmation) {
+        message.textContent = 'Les mots de passe ne correspondent pas.';
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Création...';
+      const { data, error } = await window.PlanifProfSupabase.auth.signUp({
+        email: document.getElementById('signupEmail').value.trim().toLowerCase(),
+        password,
+        options: {
+          data: { display_name: document.getElementById('displayName').value.trim() },
+          emailRedirectTo: new URL('login.html', window.location.href).href
+        }
+      });
+      button.disabled = false;
+      button.textContent = 'Créer mon compte';
+      if (error) {
+        message.textContent = error.message || 'La création du compte a échoué.';
+        return;
+      }
+      message.className = 'signup-success';
+      message.textContent = data.session
+        ? 'Compte créé. Redirection vers votre espace...'
+        : 'Compte créé. Vérifiez votre courriel pour confirmer le compte, puis connectez-vous.';
+      if (data.session) setTimeout(() => window.location.href = 'builder.html', 900);
+    });
+  </script>
+</body>
+</html>

@@ -1,1 +1,53 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PlanifProf | Connexion</title><link rel="stylesheet" href="styles.css"></head><body class="login-body"><main class="login-shell"><section class="login-card"><a class="brand login-brand" href="index.html"><span>✦</span> PlanifProf</a><p class="eyebrow">Connexion enseignant</p><h1>Accéder à mes données</h1><p class="muted">Chaque compte voit seulement ses horaires, groupes, élèves, plans de classe et résultats.</p><form id="loginForm" class="login-form"><label>Utilisateur<input id="username" autocomplete="username" placeholder="Identifiant ou courriel" required></label><label>Mot de passe<input id="password" type="password" autocomplete="current-password" placeholder="Mot de passe" required></label><button class="btn full-width" type="submit">Se connecter</button><p id="loginError" class="login-error" role="alert"></p></form></section></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js"></script><script>const LOGIN_DOMAIN='planifprof.local';function usernameToEmail(v){const c=v.trim();return c.includes('@')?c:`${c}@${LOGIN_DOMAIN}`}async function redirectIfAlreadyConnected(){if(!window.PlanifProfSupabase)return;const{data}=await window.PlanifProfSupabase.auth.getSession();if(data.session)location.href='builder.html'}redirectIfAlreadyConnected();document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();const err=document.getElementById('loginError');err.textContent='';if(!window.PlanifProfSupabase){err.textContent='Supabase n’est pas configuré. Remplace les valeurs dans supabase-config.js.';return}const{error}=await window.PlanifProfSupabase.auth.signInWithPassword({email:usernameToEmail(username.value),password:password.value});if(error){err.textContent='Utilisateur ou mot de passe invalide.';return}location.href='builder.html'});</script></body></html>
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PlanifProf | Connexion</title><link rel="stylesheet" href="styles.css"></head><body class="login-body"><main class="login-shell"><section class="login-card"><a class="brand login-brand" href="index.html"><span>✦</span> PlanifProf</a><p class="eyebrow">Connexion enseignant</p><h1>Accéder à mes données</h1><p class="muted">Chaque compte voit seulement ses horaires, groupes, élèves, plans de classe et résultats.</p><form id="loginForm" class="login-form"><label>Utilisateur<input id="username" autocomplete="username" placeholder="Identifiant ou courriel" required></label><label>Mot de passe<input id="password" type="password" autocomplete="current-password" placeholder="Mot de passe" required></label><button class="btn full-width" type="submit">Se connecter</button><p id="loginError" class="login-error" role="alert"></p></form><p class="account-switch">Pas encore de compte? <a href="signup.html">Créer un compte</a></p></section></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js"></script><script>
+    async function redirectIfAlreadyConnected(){
+      if(!window.PlanifProfSupabase) return;
+      const { data } = await window.PlanifProfSupabase.auth.getSession();
+      if(data.session) window.location.href = 'builder.html';
+    }
+    redirectIfAlreadyConnected();
+
+    document.getElementById('loginForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const errorBox = document.getElementById('loginError');
+      const submitButton = event.submitter;
+      errorBox.textContent = '';
+      if(!window.PlanifProfSupabase){
+        errorBox.textContent = 'Supabase n’est pas configuré.';
+        return;
+      }
+      submitButton.disabled = true;
+      submitButton.textContent = 'Connexion...';
+      try {
+        const { data, error } = await window.PlanifProfSupabase.functions.invoke('secure-login', {
+          body: {
+            email: document.getElementById('username').value.trim().toLowerCase(),
+            password: document.getElementById('password').value
+          }
+        });
+        if(error) throw error;
+        if(!data?.success){
+          if(data?.locked){
+            const minutes = Math.max(1, Math.ceil((new Date(data.locked_until) - new Date()) / 60000));
+            errorBox.textContent = `Compte temporairement verrouillé. Réessayez dans environ ${minutes} minute(s).`;
+          } else {
+            errorBox.textContent = data?.remaining_attempts === 1
+              ? 'Identifiants invalides. Il reste 1 essai avant le verrouillage.'
+              : `Identifiants invalides. Il reste ${data?.remaining_attempts ?? 0} essais avant le verrouillage.`;
+          }
+          return;
+        }
+        const { error: sessionError } = await window.PlanifProfSupabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token
+        });
+        if(sessionError) throw sessionError;
+        window.location.href = 'builder.html';
+      } catch(error){
+        console.error('Erreur de connexion sécurisée', error);
+        errorBox.textContent = 'Impossible de se connecter pour le moment. Réessayez plus tard.';
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Se connecter';
+      }
+    });
+  </script></body></html>
