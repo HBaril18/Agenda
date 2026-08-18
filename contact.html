@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlanifProf | Nous contacter</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="contact">
+  <header class="site-header">
+    <a class="brand" href="index.html"><span>✦</span> PlanifProf</a>
+    <nav class="main-nav">
+      <a href="builder.html">Construire l’horaire</a>
+      <a href="bibliotheque.html">Bibliothèque</a>
+      <a href="groupes.html">Groupes</a>
+      <a href="certificats.html">Certificats</a>
+      <a class="active" href="contact.html">Nous contacter</a>
+    </nav>
+  </header>
+  <main class="page-shell contact-shell">
+    <div class="page-title">
+      <p class="eyebrow">Améliorer PlanifProf</p>
+      <h1>Partagez une idée ou signalez un problème</h1>
+      <p>Votre demande sera enregistrée, numérotée et transmise à l’administration dans un format facile à traiter.</p>
+    </div>
+    <section class="contact-layout">
+      <aside class="panel contact-guide">
+        <h2>Pour accélérer le traitement</h2>
+        <ol>
+          <li>Choisissez la catégorie la plus précise.</li>
+          <li>Indiquez la page ou la fonction concernée.</li>
+          <li>Décrivez le résultat attendu.</li>
+          <li>Ajoutez les étapes permettant de reproduire un problème.</li>
+        </ol>
+        <p class="muted">Vos informations de compte servent uniquement à identifier et suivre la demande.</p>
+      </aside>
+      <section class="panel contact-form-card">
+        <form id="contactForm" class="contact-form">
+          <div class="contact-form-grid">
+            <label>Type de demande
+              <select id="requestType" required>
+                <option value="">Choisir...</option>
+                <option value="idee">Idée d’amélioration</option>
+                <option value="probleme">Problème technique</option>
+                <option value="question">Question</option>
+                <option value="accessibilite">Accessibilité</option>
+                <option value="autre">Autre</option>
+              </select>
+            </label>
+            <label>Priorité estimée
+              <select id="requestPriority" required>
+                <option value="normale">Normale</option>
+                <option value="faible">Faible</option>
+                <option value="haute">Haute</option>
+                <option value="bloquante">Bloquante</option>
+              </select>
+            </label>
+            <label class="span-2">Titre de la demande
+              <input id="requestTitle" maxlength="120" placeholder="Ex. Ajouter un filtre dans la grille des évaluations" required>
+            </label>
+            <label>Page concernée
+              <select id="requestPage" required>
+                <option value="accueil">Accueil</option>
+                <option value="horaire">Horaire</option>
+                <option value="bibliotheque">Bibliothèque</option>
+                <option value="groupes">Groupes</option>
+                <option value="certificats">Certificats</option>
+                <option value="compte">Compte et connexion</option>
+                <option value="autre">Autre</option>
+              </select>
+            </label>
+            <label>Résultat souhaité
+              <input id="desiredOutcome" maxlength="180" placeholder="Résumé du résultat attendu" required>
+            </label>
+            <label class="span-2">Description détaillée
+              <textarea id="requestDescription" rows="7" maxlength="4000" placeholder="Décrivez la situation, le besoin et pourquoi le changement serait utile..." required></textarea>
+            </label>
+            <label class="span-2">Étapes pour reproduire le problème <span class="optional">optionnel</span>
+              <textarea id="reproductionSteps" rows="4" maxlength="2000" placeholder="1. Ouvrir...&#10;2. Cliquer...&#10;3. Observer..."></textarea>
+            </label>
+          </div>
+          <label class="contact-consent"><input id="contactConsent" type="checkbox" required> J’accepte que ces informations soient transmises à l’administration de PlanifProf pour traiter cette demande.</label>
+          <div class="contact-submit-row">
+            <p id="contactMessage" class="form-message" role="status"></p>
+            <button id="contactSubmit" class="btn" type="submit">Envoyer la demande</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js"></script>
+  <script src="contact.js"></script>
+</body>
+</html>

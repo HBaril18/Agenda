@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PlanifProf | Administration</title><link rel="stylesheet" href="styles.css"></head>
+<body data-page="admin">
+<header class="site-header"><a class="brand" href="index.html"><span>✦</span> PlanifProf</a><nav class="main-nav"><a href="builder.html">Horaire</a><a href="groupes.html">Groupes</a><a href="contact.html">Nous contacter</a><a class="active" href="admin.html">Administration</a></nav></header>
+<main class="page-shell wide admin-shell">
+  <div class="admin-heading"><div><p class="eyebrow">Administration</p><h1>Tableau de bord PlanifProf</h1><p class="muted">Statistiques générales et suivi des demandes.</p></div><button id="refreshAdmin" class="btn btn-soft">Actualiser</button></div>
+  <section id="adminDenied" class="panel admin-denied" hidden><h2>Accès refusé</h2><p>Ce compte ne possède pas les droits d’administration.</p></section>
+  <div id="adminContent" hidden>
+    <section id="statsGrid" class="stats-grid"></section>
+    <section class="admin-charts-grid">
+      <article class="panel"><h2>Demandes par statut</h2><div id="statusBars" class="stat-bars"></div></article>
+      <article class="panel"><h2>Demandes par type</h2><div id="typeBars" class="stat-bars"></div></article>
+    </section>
+    <section class="panel admin-requests-panel">
+      <div class="panel-head"><div><h2>Demandes reçues</h2><p class="muted">Les plus récentes apparaissent en premier.</p></div><select id="feedbackFilter"><option value="all">Tous les statuts</option><option value="nouvelle">Nouvelles</option><option value="en_cours">En cours</option><option value="planifiee">Planifiées</option><option value="terminee">Terminées</option><option value="refusee">Refusées</option></select></div>
+      <div id="feedbackList" class="feedback-admin-list"></div>
+    </section>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js"></script><script src="script.js"></script><script src="admin.js"></script>
+</body></html>

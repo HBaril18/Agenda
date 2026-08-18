@@ -386,6 +386,20 @@ async function initializePlanifProf(){
   bindCertificates();
   bindAdvancedGroupTools();
   const header = document.querySelector('.site-header');
+  if(header && currentSession && !document.getElementById('accountBadge')){
+    const account = document.createElement('div');
+    account.id = 'accountBadge';
+    account.className = 'account-badge';
+    const displayName = currentSession.user.user_metadata?.display_name || currentSession.user.email?.split('@')[0] || 'Compte';
+    account.innerHTML = `<span class="account-avatar">${displayName.charAt(0).toUpperCase()}</span><span><small>Connecté</small><strong>${displayName}</strong></span>`;
+    header.appendChild(account);
+    const { data: adminRow } = await window.PlanifProfSupabase.from('admin_users').select('user_id').eq('user_id', currentSession.user.id).maybeSingle();
+    if(adminRow && !document.querySelector('a[href="admin.html"]')){
+      const adminLink = document.createElement('a');
+      adminLink.href = 'admin.html'; adminLink.className = 'admin-header-link'; adminLink.textContent = 'Administration';
+      header.querySelector('.main-nav')?.appendChild(adminLink);
+    }
+  }
   if(header && currentSession && !document.getElementById('logoutBtn')){
     const btn = document.createElement('button');
     btn.id = 'logoutBtn';
