@@ -1057,3 +1057,111 @@ body[data-page="groups"] .page-title h1 {
 
 /* Connexion et compte */
 .login-body{min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#f5fbf3,#eef4ff)}.login-shell{width:min(440px,calc(100% - 32px))}.login-card{background:#fff;border:1px solid #e1e7ef;border-radius:30px;padding:34px;box-shadow:0 28px 80px rgba(30,40,60,.14)}.login-brand{display:inline-block;margin-bottom:24px}.login-form{display:grid;gap:16px;margin:24px 0}.login-form label{display:grid;gap:7px;font-weight:900;color:#344054}.login-form input{min-height:46px;border:1px solid #d7deea;border-radius:14px;padding:12px 14px;font:inherit}.login-error{color:#dc2626;font-weight:800;min-height:20px}.logout-btn{border:0;background:#f1f5f9;color:#334155;font-weight:900;border-radius:999px;padding:10px 14px;cursor:pointer}.logout-btn:hover{background:#fee2e2;color:#991b1b}
+
+/* Indicateur de sauvegarde automatique */
+.save-indicator {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 11px 16px;
+  border: 1px solid #dce5ef;
+  border-radius: 999px;
+  background: rgba(255,255,255,.96);
+  color: #344054;
+  box-shadow: 0 14px 40px rgba(30,40,60,.16);
+  backdrop-filter: blur(12px);
+  font-size: .9rem;
+  font-weight: 850;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity .22s ease, transform .22s ease;
+}
+.save-indicator.is-hidden {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+.save-indicator-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #eaf8e8;
+  color: #2f7d4a;
+  font-weight: 950;
+}
+.save-indicator.is-saving .save-indicator-icon {
+  background: #e8f1ff;
+  color: #315fa8;
+  animation: saveSpin .8s linear infinite;
+}
+.save-indicator.is-error .save-indicator-icon {
+  background: #fee2e2;
+  color: #b42318;
+}
+.save-indicator.is-offline .save-indicator-icon {
+  background: #fff3d7;
+  color: #9a6700;
+}
+@keyframes saveSpin { to { transform: rotate(360deg); } }
+
+/* Confirmation avant déconnexion */
+.logout-save-confirmation {
+  position: fixed;
+  left: 50%;
+  top: 24px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(520px, calc(100vw - 32px));
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #dce5ef;
+  box-shadow: 0 22px 70px rgba(30,40,60,.22);
+  opacity: 0;
+  transform: translate(-50%, -18px);
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease;
+}
+.logout-save-confirmation.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.logout-save-confirmation.is-success { border-color: #bfe7b6; }
+.logout-save-confirmation.is-error { border-color: #fecaca; pointer-events: auto; }
+.logout-save-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #eaf8e8;
+  color: #2f7d4a;
+  font-size: 1.15rem;
+  font-weight: 950;
+}
+.logout-save-confirmation.is-error .logout-save-icon {
+  background: #fee2e2;
+  color: #b42318;
+}
+.logout-save-confirmation strong { color: #1f2937; }
+.logout-save-confirmation p { margin: 3px 0 0; color: #667085; font-size: .9rem; }
+@media(max-width: 600px){
+  .save-indicator { right: 16px; bottom: 16px; }
+  .logout-save-confirmation { top: 14px; }
+}
+@media print {
+  .save-indicator,
+  .logout-save-confirmation { display: none !important; }
+}

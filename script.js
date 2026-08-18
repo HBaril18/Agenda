@@ -73,16 +73,65 @@ function deepMerge(base, saved){
   });
   return base;
 }
-function persist(){
+let saveTimer = null;
+let activeSavePromise = null;
+
+function ensureSaveIndicator(){
+  let indicator = document.getElementById('saveIndicator');
+  if(indicator) return indicator;
+  indicator = document.createElement('div');
+  indicator.id = 'saveIndicator';
+  indicator.className = 'save-indicator is-hidden';
+  indicator.setAttribute('role', 'status');
+  indicator.setAttribute('aria-live', 'polite');
+  indicator.innerHTML = '<span class="save-indicator-icon">✓</span><span class="save-indicator-text">Sauvegardé</span>';
+  document.body.appendChild(indicator);
+  return indicator;
+}
+
+function setSaveIndicator(status, message){
+  const indicator = ensureSaveIndicator();
+  const icon = indicator.querySelector('.save-indicator-icon');
+  const text = indicator.querySelector('.save-indicator-text');
+  indicator.className = `save-indicator is-${status}`;
+  const icons = { saving: '↻', saved: '✓', error: '!', offline: '•' };
+  icon.textContent = icons[status] || '✓';
+  text.textContent = message;
+  if(status === 'saved'){
+    clearTimeout(indicator.hideTimer);
+    indicator.hideTimer = setTimeout(() => indicator.classList.add('is-hidden'), 2200);
+  }
+}
+
+async function saveStateToSupabase(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   const client = window.PlanifProfSupabase;
-  if(client && currentSession){
-    client.from('user_settings').upsert({
-      user_id: currentSession.user.id,
-      state,
-      updated_at: new Date().toISOString()
-    }).then(({ error }) => { if(error) console.warn('Erreur Supabase sauvegarde state', error); });
+  if(!client || !currentSession){
+    setSaveIndicator('offline', 'Sauvegardé sur cet appareil');
+    return { success: false, localOnly: true };
   }
+  setSaveIndicator('saving', 'Sauvegarde en cours...');
+  activeSavePromise = client.from('user_settings').upsert({
+    user_id: currentSession.user.id,
+    state,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'user_id' });
+  const { error } = await activeSavePromise;
+  activeSavePromise = null;
+  if(error){
+    console.warn('Erreur Supabase sauvegarde state', error);
+    setSaveIndicator('error', 'Échec de la sauvegarde');
+    return { success: false, error };
+  }
+  setSaveIndicator('saved', 'Toutes les modifications sont sauvegardées');
+  return { success: true };
+}
+
+function persist(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  setSaveIndicator('saving', 'Sauvegarde en cours...');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveStateToSupabase(); }, 500);
 }
 function makeId(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
 function getCourse(id){ return state.courses.find(c => c.id === id); }
@@ -312,6 +361,23 @@ function bindCertificates(){
   update();
 }
 
+function showSaveConfirmation(success, message){
+  let toast = document.getElementById('logoutSaveConfirmation');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = 'logoutSaveConfirmation';
+    toast.className = 'logout-save-confirmation';
+    toast.setAttribute('role', 'alert');
+    document.body.appendChild(toast);
+  }
+  toast.className = `logout-save-confirmation ${success ? 'is-success' : 'is-error'} is-visible`;
+  toast.innerHTML = `<span class="logout-save-icon">${success ? '✓' : '!'}</span><div><strong>${success ? 'Sauvegarde confirmée' : 'Attention'}</strong><p>${message}</p></div>`;
+  if(!success){
+    clearTimeout(toast.hideTimer);
+    toast.hideTimer = setTimeout(() => toast.classList.remove('is-visible'), 5000);
+  }
+}
+
 async function initializePlanifProf(){
   state = await loadSupabaseState();
   bindBuilder();
@@ -326,7 +392,27 @@ async function initializePlanifProf(){
     btn.className = 'logout-btn';
     btn.textContent = 'Déconnexion';
     btn.addEventListener('click', async () => {
-      if(window.PlanifProfSupabase) await window.PlanifProfSupabase.auth.signOut();
+      btn.disabled = true;
+      btn.textContent = 'Sauvegarde...';
+      clearTimeout(saveTimer);
+      const result = await saveStateToSupabase();
+      if(!result.success && !result.localOnly){
+        btn.disabled = false;
+        btn.textContent = 'Déconnexion';
+        showSaveConfirmation(false, 'La sauvegarde a échoué. La déconnexion a été annulée pour éviter une perte de données.');
+        return;
+      }
+      showSaveConfirmation(true, 'Toutes vos modifications ont été sauvegardées. Déconnexion en cours...');
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      if(window.PlanifProfSupabase){
+        const { error } = await window.PlanifProfSupabase.auth.signOut({ scope: 'local' });
+        if(error){
+          btn.disabled = false;
+          btn.textContent = 'Déconnexion';
+          showSaveConfirmation(false, 'Les données sont sauvegardées, mais la déconnexion a échoué. Réessayez.');
+          return;
+        }
+      }
       localStorage.removeItem(STORAGE_KEY);
       window.location.href = 'login.html';
     });
