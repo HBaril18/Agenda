@@ -18,7 +18,7 @@
       submitButton.disabled = true;
       submitButton.textContent = 'Connexion...';
       try {
-        const { data, error } = await window.PlanifProfSupabase.functions.invoke('secure-login', {
+        const { data, error } = await window.PlanifProfSupabase.functions.invoke('super-service', {
           body: {
             email: document.getElementById('username').value.trim().toLowerCase(),
             password: document.getElementById('password').value
