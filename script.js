@@ -17,22 +17,9 @@ const defaultState = {
     calendar: 'Calendrier scolaire 2026-2027',
     teacher: 'Nom de l’enseignant'
   },
-  courses: [
-    {id:'math', name:'Mathématique', color:'#4f7cff'},
-    {id:'fr', name:'Français', color:'#ef5da8'},
-    {id:'sci', name:'Sciences', color:'#10b981'},
-    {id:'art', name:'Arts', color:'#f59e0b'}
-  ],
-  groups: [
-    {id:'601', name:'Groupe 601', level:'Primaire', teacher:'', room:'', notes:''},
-    {id:'602', name:'Groupe 602', level:'Primaire', teacher:'', room:'', notes:''},
-    {id:'sec1', name:'Secondaire 1', level:'Secondaire', teacher:'', room:'', notes:''}
-  ],
-  students: [
-    {id:'s1', name:'Alex Morin', groupId:'601', info:''},
-    {id:'s2', name:'Camille Roy', groupId:'601', info:''},
-    {id:'s3', name:'Noah Tremblay', groupId:'602', info:''}
-  ]
+  courses: [],
+  groups: [],
+  students: []
 };
 
 let state = structuredClone(defaultState);
