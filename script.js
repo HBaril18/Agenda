@@ -73,16 +73,55 @@ function deepMerge(base, saved){
   });
   return base;
 }
-function persist(){
+let saveTimeout = null;
+let saveInProgress = null;
+
+async function saveStateToSupabase() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
   const client = window.PlanifProfSupabase;
-  if(client && currentSession){
-    client.from('user_settings').upsert({
-      user_id: currentSession.user.id,
-      state,
-      updated_at: new Date().toISOString()
-    }).then(({ error }) => { if(error) console.warn('Erreur Supabase sauvegarde state', error); });
+
+  if (!client || !currentSession) {
+    return { success: false, localOnly: true };
   }
+
+  saveInProgress = client
+    .from('user_settings')
+    .upsert(
+      {
+        user_id: currentSession.user.id,
+        state: state,
+        updated_at: new Date().toISOString()
+      },
+      {
+        onConflict: 'user_id'
+      }
+    );
+
+  const { error } = await saveInProgress;
+  saveInProgress = null;
+
+  if (error) {
+    console.error('Erreur de sauvegarde Supabase :', error);
+    return {
+      success: false,
+      error
+    };
+  }
+
+  return {
+    success: true
+  };
+}
+
+function persist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+  clearTimeout(saveTimeout);
+
+  saveTimeout = setTimeout(() => {
+    saveStateToSupabase();
+  }, 500);
 }
 function makeId(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
 function getCourse(id){ return state.courses.find(c => c.id === id); }
@@ -236,7 +275,34 @@ function bindBuilder(){
     }); persist(); renderGrid();
   });
   $('#clearGrid')?.addEventListener('click', () => { state.data = {}; persist(); renderGrid(); });
-  $('#saveLocal')?.addEventListener('click', () => { persist(); alert('Horaire sauvegardé dans ce navigateur.'); });
+ $('#saveLocal')?.addEventListener('click', async () => {
+  const button = $('#saveLocal');
+
+  button.disabled = true;
+  button.textContent = 'Sauvegarde...';
+
+  clearTimeout(saveTimeout);
+
+  const result = await saveStateToSupabase();
+
+  if (result.success) {
+    button.textContent = 'Sauvegardé ✓';
+  } else if (result.localOnly) {
+    button.textContent = 'Sauvegardé localement';
+  } else {
+    button.textContent = 'Erreur';
+
+    alert(
+      'La sauvegarde dans Supabase a échoué. ' +
+      'Vérifie la connexion Internet et les règles RLS.'
+    );
+  }
+
+  setTimeout(() => {
+    button.disabled = false;
+    button.textContent = 'Sauvegarder';
+  }, 1500);
+});
   $('#loadLocal')?.addEventListener('click', () => { state = loadState(); syncMetaFields(); syncControls(); applyTheme(state.themeOptions || themePresets[state.theme] || themePresets.forest, false); renderGrid(); alert('Horaire chargé.'); });
   $('#cellForm')?.addEventListener('submit', e => {
     e.preventDefault();
@@ -326,10 +392,50 @@ async function initializePlanifProf(){
     btn.className = 'logout-btn';
     btn.textContent = 'Déconnexion';
     btn.addEventListener('click', async () => {
-      if(window.PlanifProfSupabase) await window.PlanifProfSupabase.auth.signOut();
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.href = 'login.html';
+  btn.disabled = true;
+  btn.textContent = 'Sauvegarde...';
+
+  clearTimeout(saveTimeout);
+
+  const result = await saveStateToSupabase();
+
+  if (!result.success && !result.localOnly) {
+    console.error(
+      'Déconnexion annulée parce que la sauvegarde a échoué.',
+      result.error
+    );
+
+    btn.disabled = false;
+    btn.textContent = 'Déconnexion';
+
+    alert(
+      'La sauvegarde dans la base de données a échoué. ' +
+      'La déconnexion a été annulée pour éviter de perdre les changements.'
+    );
+
+    return;
+  }
+
+  btn.textContent = 'Déconnexion...';
+
+  const { error } =
+    await window.PlanifProfSupabase.auth.signOut({
+      scope: 'local'
     });
+
+  if (error) {
+    console.error('Erreur de déconnexion :', error);
+
+    btn.disabled = false;
+    btn.textContent = 'Déconnexion';
+
+    alert('La déconnexion a échoué. Réessaie dans quelques instants.');
+    return;
+  }
+
+  localStorage.removeItem(STORAGE_KEY);
+  window.location.href = 'login.html';
+});
     header.appendChild(btn);
   }
 }
