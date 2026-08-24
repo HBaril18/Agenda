@@ -1,71 +1,594 @@
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
 const STORAGE_KEY = 'planifprof-state-v7';
 
+/*
+ * Version du modèle de données.
+ *
+ * v1 :
+ * - les lignes étaient déduites de am / pm / lunch
+ * - les cases étaient dans state.data
+ *
+ * v2 :
+ * - les lignes sont explicites dans state.schedule.rows
+ * - les cases sont dans state.schedule.cells
+ * - les groupes peuvent avoir une couleur
+ * - le calendrier scolaire possède sa propre structure
+ */
+const STATE_VERSION = 2;
+
+const DEFAULT_ROW_HEIGHT = 90;
+const DEFAULT_BREAK_HEIGHT = 55;
+
 const defaultState = {
-  days: 9,
-  am: 2,
-  pm: 2,
-  lunch: true,
-  hours: false,
-  selectedGroupId: '601',
-  data: {},
-  theme: 'forest',
-  themeOptions: null,
-  meta: {
-    school: 'École du bonheur',
-    calendar: 'Calendrier scolaire 2026-2027',
-    teacher: 'Nom de l’enseignant'
-  },
-  courses: [
-    {id:'math', name:'Mathématique', color:'#4f7cff'},
-    {id:'fr', name:'Français', color:'#ef5da8'},
-    {id:'sci', name:'Sciences', color:'#10b981'},
-    {id:'art', name:'Arts', color:'#f59e0b'}
-  ],
-  groups: [
-    {id:'601', name:'Groupe 601', level:'Primaire', teacher:'', room:'', notes:''},
-    {id:'602', name:'Groupe 602', level:'Primaire', teacher:'', room:'', notes:''},
-    {id:'sec1', name:'Secondaire 1', level:'Secondaire', teacher:'', room:'', notes:''}
-  ],
-  students: [
-    {id:'s1', name:'Alex Morin', groupId:'601', info:''},
-    {id:'s2', name:'Camille Roy', groupId:'601', info:''},
-    {id:'s3', name:'Noah Tremblay', groupId:'602', info:''}
-  ]
+    version: STATE_VERSION,
+
+    /*
+     * Ces propriétés sont conservées pour assurer
+     * la compatibilité avec l'interface actuelle.
+     */
+    days: 9,
+    am: 2,
+    pm: 2,
+    lunch: true,
+    hours: false,
+
+    selectedGroupId: '601',
+
+    /*
+     * Alias temporaire de compatibilité.
+     *
+     * Le vrai stockage v2 est :
+     * state.schedule.cells
+     */
+    data: {},
+
+    /*
+     * NOUVEAU MODÈLE DE L'HORAIRE
+     */
+    schedule: {
+        rows: [],
+
+        cells: {},
+
+        settings: {
+            rowHeight: DEFAULT_ROW_HEIGHT,
+            cellWidth: null
+        }
+    },
+
+    /*
+     * NOUVEAU MODÈLE DU CALENDRIER SCOLAIRE
+     *
+     * Il sera utilisé à la phase Agenda.
+     */
+    calendar: {
+        schoolYear: '',
+        startDate: '',
+        endDate: '',
+
+        cycle: {
+            length: 5,
+            startDay: 1
+        },
+
+        schoolDays: [],
+        holidays: [],
+        pedagogicalDays: [],
+        exceptions: []
+    },
+
+    theme: 'forest',
+    themeOptions: null,
+
+    meta: {
+        school: 'École du bonheur',
+        calendar: 'Calendrier scolaire 2026-2027',
+        teacher: 'Nom de l’enseignant'
+    },
+
+    courses: [
+        {
+            id: 'math',
+            name: 'Mathématique',
+            color: '#4f7cff'
+        },
+        {
+            id: 'fr',
+            name: 'Français',
+            color: '#ef5da8'
+        },
+        {
+            id: 'sci',
+            name: 'Sciences',
+            color: '#10b981'
+        },
+        {
+            id: 'art',
+            name: 'Arts',
+            color: '#f59e0b'
+        }
+    ],
+
+    /*
+     * Les groupes ont maintenant leur propre couleur.
+     */
+    groups: [
+        {
+            id: '601',
+            name: 'Groupe 601',
+            level: 'Primaire',
+            teacher: '',
+            room: '',
+            notes: '',
+            color: '#4f7cff'
+        },
+        {
+            id: '602',
+            name: 'Groupe 602',
+            level: 'Primaire',
+            teacher: '',
+            room: '',
+            notes: '',
+            color: '#ef5da8'
+        },
+        {
+            id: 'sec1',
+            name: 'Secondaire 1',
+            level: 'Secondaire',
+            teacher: '',
+            room: '',
+            notes: '',
+            color: '#10b981'
+        }
+    ],
+
+    students: [
+        {
+            id: 's1',
+            name: 'Alex Morin',
+            groupId: '601',
+            info: ''
+        },
+        {
+            id: 's2',
+            name: 'Camille Roy',
+            groupId: '601',
+            info: ''
+        },
+        {
+            id: 's3',
+            name: 'Noah Tremblay',
+            groupId: '602',
+            info: ''
+        }
+    ]
 };
 
 let state = structuredClone(defaultState);
 let currentSession = null;
-function loadState(){
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return saved ? deepMerge(structuredClone(defaultState), saved) : structuredClone(defaultState);
-  } catch { return structuredClone(defaultState); }
+
+/*
+ * ============================================================
+ * MIGRATION DU MODÈLE DE DONNÉES
+ * ============================================================
+ *
+ * Cette fonction transforme automatiquement les anciens
+ * horaires PlanifProf vers le nouveau modèle v2.
+ *
+ * Elle permet donc de conserver les horaires déjà créés.
+ */
+
+function createLegacyRows(source) {
+    const rows = [];
+
+    const am = Number(source.am) || 0;
+    const pm = Number(source.pm) || 0;
+
+    /*
+     * Périodes AM
+     */
+    for (let i = 1; i <= am; i++) {
+        rows.push({
+            id: `am${i}`,
+            type: 'course',
+            label: `Cours ${i}`,
+            defaultTime: hourFor(i - 1),
+            height: DEFAULT_ROW_HEIGHT
+        });
+    }
+
+    /*
+     * Dîner
+     */
+    if (source.lunch) {
+        rows.push({
+            id: 'lunch',
+            type: 'lunch',
+            label: 'Dîner',
+            defaultTime: hourFor(am),
+            height: DEFAULT_BREAK_HEIGHT
+        });
+    }
+
+    /*
+     * Périodes PM
+     */
+    for (let i = 1; i <= pm; i++) {
+        const index = am + i - 1;
+
+        rows.push({
+            id: `pm${i}`,
+            type: 'course',
+            label: `Cours ${am + i}`,
+            defaultTime: hourFor(index),
+            height: DEFAULT_ROW_HEIGHT
+        });
+    }
+
+    return rows;
 }
 
-async function loadSupabaseState(){
-  const protectedPages = ['builder','library','groups','certificates'];
-  const page = document.body?.dataset?.page || 'home';
-  const client = window.PlanifProfSupabase;
-  if(!client){
-    if(protectedPages.includes(page)) window.location.href = 'login.html';
-    return loadState();
-  }
-  const { data: sessionData } = await client.auth.getSession();
-  currentSession = sessionData.session;
-  if(!currentSession){
-    if(protectedPages.includes(page)) window.location.href = 'login.html';
-    return loadState();
-  }
-  const userId = currentSession.user.id;
-  const { data, error } = await client.from('user_settings').select('state').eq('user_id', userId).maybeSingle();
-  if(error){ console.warn('Erreur Supabase lecture state', error); return loadState(); }
-  if(data?.state) return deepMerge(structuredClone(defaultState), data.state);
-  const fresh = structuredClone(defaultState);
-  await client.from('user_settings').upsert({ user_id: userId, state: fresh, updated_at: new Date().toISOString() });
-  return fresh;
+
+/*
+ * Normalisation d'une case.
+ *
+ * Même si une ancienne case ne possède pas encore ces propriétés,
+ * elles seront automatiquement ajoutées.
+ */
+function normalizeCell(cell) {
+
+    const source =
+        cell && typeof cell === 'object'
+            ? cell
+            : {};
+
+    return {
+        ...source,
+
+        courseId: source.courseId || '',
+        groupId: source.groupId || '',
+        room: source.room || '',
+        time: source.time || '',
+        note: source.note || '',
+
+        /*
+         * Paramètres visuels préparés pour les prochaines phases.
+         */
+        text: {
+            color: '',
+            align: 'center',
+            vertical: 'center',
+            wrap: true,
+            showGenericLabel: true,
+
+            ...(source.text || {})
+        },
+
+        /*
+         * Mode d'affichage de la couleur du groupe.
+         *
+         * Valeurs prévues :
+         * - dot
+         * - border
+         * - background
+         */
+        groupColorMode:
+            source.groupColorMode || 'dot',
+
+        /*
+         * Dimensions personnalisées.
+         */
+        size: {
+            width: null,
+            height: null,
+
+            ...(source.size || {})
+        }
+    };
 }
+
+
+/*
+ * Migration générale.
+ */
+function migrateState(input) {
+
+    const source =
+        input && typeof input === 'object'
+            ? input
+            : {};
+
+    /*
+     * On part toujours du modèle complet.
+     */
+    const migrated = deepMerge(
+        structuredClone(defaultState),
+        source
+    );
+
+    /*
+     * ==========================================================
+     * ANCIEN MODÈLE → NOUVEAU MODÈLE
+     * ==========================================================
+     */
+
+    if (Number(source.version || 1) < 2) {
+
+        /*
+         * Ancien stockage :
+         *
+         * state.data = {
+         *   "am1-1": {...},
+         *   "am1-2": {...}
+         * }
+         */
+        const legacyData =
+            source.data &&
+                typeof source.data === 'object'
+                ? source.data
+                : {};
+
+        /*
+         * Génération des lignes v2 à partir
+         * de l'ancien système AM / PM / Dîner.
+         */
+        migrated.schedule.rows =
+            createLegacyRows(source);
+
+        /*
+         * Conversion des anciennes cases.
+         */
+        migrated.schedule.cells =
+            Object.fromEntries(
+                Object.entries(legacyData).map(
+                    ([cellKey, cell]) => [
+                        cellKey,
+                        normalizeCell(cell)
+                    ]
+                )
+            );
+
+        migrated.version = STATE_VERSION;
+
+    } else {
+
+        /*
+         * Le state est déjà en v2.
+         */
+        migrated.schedule =
+            migrated.schedule || {};
+
+        /*
+         * Si les lignes n'existent pas encore,
+         * on les crée à partir de la configuration actuelle.
+         */
+        migrated.schedule.rows =
+            Array.isArray(migrated.schedule.rows) &&
+                migrated.schedule.rows.length
+                ? migrated.schedule.rows
+                : createLegacyRows(migrated);
+
+        /*
+         * Sécurisation des cases.
+         */
+        migrated.schedule.cells =
+            migrated.schedule.cells &&
+                typeof migrated.schedule.cells === 'object'
+                ? migrated.schedule.cells
+                : {};
+
+        /*
+         * Normalisation de chaque case.
+         */
+        migrated.schedule.cells =
+            Object.fromEntries(
+                Object.entries(
+                    migrated.schedule.cells
+                ).map(
+                    ([cellKey, cell]) => [
+                        cellKey,
+                        normalizeCell(cell)
+                    ]
+                )
+            );
+
+        migrated.version = STATE_VERSION;
+    }
+
+    /*
+     * ==========================================================
+     * COULEURS DES GROUPES
+     * ==========================================================
+     *
+     * Les anciens groupes n'ont pas de propriété color.
+     * On leur donne donc une couleur par défaut.
+     */
+    migrated.groups =
+        (migrated.groups || []).map(group => ({
+            color: '#4f7cff',
+            ...group
+        }));
+
+    /*
+     * ==========================================================
+     * COMPATIBILITÉ AVEC L'ANCIEN CODE
+     * ==========================================================
+     *
+     * Pendant cette phase, le reste de l'application peut
+     * continuer à utiliser state.data.
+     *
+     * state.data et state.schedule.cells pointent vers le
+     * même objet.
+     */
+    migrated.data =
+        migrated.schedule.cells;
+
+
+    /*
+     * ==========================================================
+     * CALENDRIER SCOLAIRE
+     * ==========================================================
+     */
+
+    migrated.calendar = {
+
+        schoolYear: '',
+        startDate: '',
+        endDate: '',
+
+        cycle: {
+            length: 5,
+            startDay: 1
+        },
+
+        schoolDays: [],
+        holidays: [],
+        pedagogicalDays: [],
+        exceptions: [],
+
+        ...(migrated.calendar || {}),
+
+        cycle: {
+            length: 5,
+            startDay: 1,
+            ...(migrated.calendar?.cycle || {})
+        }
+    };
+
+    return migrated;
+}
+function loadState(){
+
+    try {
+
+        const saved =
+            JSON.parse(
+                localStorage.getItem(STORAGE_KEY)
+            );
+
+        return migrateState(
+            saved || defaultState
+        );
+
+    } catch {
+
+        return migrateState(
+            defaultState
+        );
+
+    }
+}
+
+async function loadSupabaseState() {
+
+    const protectedPages = [
+        'builder',
+        'library',
+        'groups',
+        'certificates'
+    ];
+
+    const page =
+        document.body?.dataset?.page || 'home';
+
+    const client =
+        window.PlanifProfSupabase;
+
+    /*
+     * Supabase indisponible.
+     */
+    if (!client) {
+
+        if (
+            protectedPages.includes(page)
+        ) {
+            window.location.href = 'login.html';
+        }
+
+        return loadState();
+    }
+
+    /*
+     * Session actuelle.
+     */
+    const {
+        data: sessionData
+    } = await client.auth.getSession();
+
+    currentSession =
+        sessionData.session;
+
+    if (!currentSession) {
+
+        if (
+            protectedPages.includes(page)
+        ) {
+            window.location.href = 'login.html';
+        }
+
+        return loadState();
+    }
+
+    const userId =
+        currentSession.user.id;
+
+    /*
+     * Lecture du state utilisateur.
+     */
+    const {
+        data,
+        error
+    } = await client
+        .from('user_settings')
+        .select('state')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (error) {
+
+        console.warn(
+            'Erreur Supabase lecture state',
+            error
+        );
+
+        return loadState();
+    }
+
+    /*
+     * IMPORTANT :
+     *
+     * Même les anciennes données Supabase
+     * passent maintenant par migrateState().
+     */
+    if (data?.state) {
+
+        return migrateState(
+            data.state
+        );
+    }
+
+    /*
+     * Nouvel utilisateur.
+     */
+    const fresh =
+        migrateState(
+            defaultState
+        );
+
+    await client
+        .from('user_settings')
+        .upsert({
+            user_id: userId,
+            state: fresh,
+            updated_at:
+                new Date().toISOString()
+        });
+
+    return fresh;
+}
+
 function deepMerge(base, saved){
   Object.keys(saved || {}).forEach(key => {
     if(saved[key] && typeof saved[key] === 'object' && !Array.isArray(saved[key]) && base[key]) base[key] = deepMerge(base[key], saved[key]);
@@ -138,12 +661,91 @@ function getCourse(id){ return state.courses.find(c => c.id === id); }
 function getGroup(id){ return state.groups.find(g => g.id === id); }
 function key(row, day){ return `${row}-${day}`; }
 function hourFor(index){ return ['08:30','09:25','10:20','11:15','12:10','13:05','14:00','14:55','15:40'][index] || ''; }
-function rows(){
-  const out = [];
-  for(let i=1;i<=state.am;i++) out.push({type:'course', label:`Cours ${i}`, slot:`am${i}`});
-  if(state.lunch) out.push({type:'lunch', label:'Dîner', slot:'lunch'});
-  for(let i=1;i<=state.pm;i++) out.push({type:'course', label:`Cours ${state.am+i}`, slot:`pm${i}`});
-  return out;
+function rows() {
+
+    /*
+     * À partir de la v2, les lignes explicites
+     * deviennent la source de vérité.
+     */
+    return (
+        state.schedule?.rows || []
+    ).map(row => ({
+
+        ...row,
+
+        /*
+         * Le reste de l'application utilise encore
+         * row.slot. On le conserve comme alias.
+         */
+        slot: row.id
+
+    }));
+}
+
+/*
+ * Reconstruit les lignes lorsqu'un utilisateur
+ * modifie le nombre de périodes AM/PM ou le dîner
+ * avec les contrôles existants.
+ *
+ * C'est temporaire pendant la migration.
+ */
+function rebuildScheduleRows() {
+
+    state.schedule =
+        state.schedule || {};
+
+    /*
+     * On conserve les cases existantes.
+     */
+    const existingCells =
+        state.schedule.cells ||
+        state.data ||
+        {};
+
+    state.schedule.rows =
+        createLegacyRows(state);
+
+    state.schedule.cells =
+        existingCells;
+
+    /*
+     * Alias de compatibilité.
+     */
+    state.data =
+        state.schedule.cells;
+}
+
+
+/*
+ * Vérifie que le nouveau modèle existe.
+ */
+function ensureScheduleModel() {
+
+    if (
+        !state.schedule ||
+        !Array.isArray(
+            state.schedule.rows
+        )
+    ) {
+
+        state =
+            migrateState(state);
+    }
+
+    if (
+        !state.schedule.cells ||
+        typeof state.schedule.cells !== 'object'
+    ) {
+
+        state.schedule.cells =
+            state.data || {};
+    }
+
+    /*
+     * Maintien de la compatibilité.
+     */
+    state.data =
+        state.schedule.cells;
 }
 
 const themePresets = {
@@ -178,41 +780,323 @@ function populateDialogOptions(){
   if($('#cellCourse')) $('#cellCourse').innerHTML = '<option value="">Aucun cours</option>' + state.courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   if($('#cellGroup')) $('#cellGroup').innerHTML = '<option value="">Aucun groupe</option>' + state.groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
 }
-function renderGrid(){
-  const grid = $('#scheduleGrid');
-  if(!grid) return;
-  grid.style.setProperty('--days', state.days);
-  grid.innerHTML = `<div></div>` + Array.from({length:state.days},(_,i)=>`<div class="day-title">Jour ${i+1}</div>`).join('');
-  const lunchIcons = ['🧁','🍉','🍰','🍍','🥗','🍒','🥬','🍓','🍩','🍎'];
-  rows().forEach((row, rowIndex) => {
-    const addTarget = row.type === 'course' && row.slot.startsWith('am') ? 'am' : row.type === 'course' ? 'pm' : '';
-    grid.insertAdjacentHTML('beforeend', addTarget ? `<button class="row-add" data-add="${addTarget}" title="Ajouter un cours">+</button>` : '<div></div>');
-    for(let day=1; day<=state.days; day++){
-      const cellKey = key(row.slot, day);
-      const item = state.data[cellKey] || {};
-      const course = getCourse(item.courseId);
-      const group = getGroup(item.groupId);
-      const style = course ? `style="--course-color:${course.color}"` : '';
-      const classes = [row.type === 'lunch' ? 'lunch-cell' : '', course ? 'course-filled' : ''].join(' ');
-      const content = row.type === 'lunch'
-        ? `<div class="cell-content"><span class="group-text">Dîner</span></div><span class="lunch-icon">${lunchIcons[(day-1)%lunchIcons.length]}</span>`
-        : `<div class="cell-content">
-            ${course ? `<span class="course-pill" style="background:${course.color};border-color:${course.color}">${course.name}</span>` : ''}
-            ${group ? `<span class="group-text">${group.name}</span>` : ''}
-            ${item.room ? `<span class="room-text">Local : ${item.room}</span>` : ''}
-            ${item.note ? `<span class="note-text">${item.note}</span>` : ''}
-          </div>`;
-      grid.insertAdjacentHTML('beforeend', `<button class="cell ${classes}" data-cell="${cellKey}" ${row.type === 'lunch' ? 'data-lunch="true"' : ''} ${style}>
-        <span class="placeholder">${row.label}</span>${content}${state.hours ? `<span class="time-label">${item.time || hourFor(rowIndex)}</span>` : ''}
-      </button>`);
-    }
-  });
-  $$('.row-add').forEach(button => button.addEventListener('click', () => {
-    if(button.dataset.add === 'am') state.am = Math.min(5, state.am + 1);
-    if(button.dataset.add === 'pm') state.pm = Math.min(5, state.pm + 1);
-    persist(); syncControls(); renderGrid();
-  }));
-  $$('[data-cell]').forEach(cell => cell.addEventListener('click', () => openCellDialog(cell.dataset.cell, cell.dataset.lunch === 'true')));
+function renderGrid() {
+
+    const grid =
+        $('#scheduleGrid');
+
+    if (!grid) return;
+
+    ensureScheduleModel();
+
+    grid.style.setProperty(
+        '--days',
+        state.days
+    );
+
+    /*
+     * En-tête des jours.
+     */
+    grid.innerHTML =
+        `<div></div>` +
+        Array
+            .from(
+                { length: state.days },
+                (_, i) =>
+                    `<div class="day-title">
+             Jour ${i + 1}
+           </div>`
+            )
+            .join('');
+
+    const lunchIcons = [
+        '🧁',
+        '🍉',
+        '🍰',
+        '🍍',
+        '🥗',
+        '🍒',
+        '🥬',
+        '🍓',
+        '🍩',
+        '🍎'
+    ];
+
+    /*
+     * Parcours des lignes v2.
+     */
+    rows().forEach(
+        (row, rowIndex) => {
+
+            /*
+             * Les boutons + AM/PM continuent d'exister
+             * pour l'interface actuelle.
+             */
+            const addTarget =
+                row.type === 'course' &&
+                    row.slot.startsWith('am')
+                    ? 'am'
+                    : row.type === 'course'
+                        ? 'pm'
+                        : '';
+
+            grid.insertAdjacentHTML(
+                'beforeend',
+
+                addTarget
+                    ? `
+            <button
+              class="row-add"
+              data-add="${addTarget}"
+              title="Ajouter un cours"
+            >
+              +
+            </button>
+          `
+                    : '<div></div>'
+            );
+
+
+            /*
+             * Cellules de chaque journée.
+             */
+            for (
+                let day = 1;
+                day <= state.days;
+                day++
+            ) {
+
+                const cellKey =
+                    key(
+                        row.slot,
+                        day
+                    );
+
+                /*
+                 * On lit désormais le nouveau modèle.
+                 */
+                const item =
+                    state.schedule.cells[cellKey] ||
+                    {};
+
+                const course =
+                    getCourse(
+                        item.courseId
+                    );
+
+                const group =
+                    getGroup(
+                        item.groupId
+                    );
+
+
+                /*
+                 * Couleur du cours.
+                 */
+                const style =
+                    course
+                        ? `style="--course-color:${course.color}"`
+                        : '';
+
+
+                const classes = [
+                    row.type === 'lunch'
+                        ? 'lunch-cell'
+                        : '',
+
+                    course
+                        ? 'course-filled'
+                        : ''
+                ]
+                    .filter(Boolean)
+                    .join(' ');
+
+
+                /*
+                 * Contenu d'un dîner.
+                 */
+                const content =
+                    row.type === 'lunch'
+
+                        ? `
+              <div class="cell-content">
+
+                <span class="group-text">
+                  ${row.label || 'Dîner'}
+                </span>
+
+              </div>
+
+              <span class="lunch-icon">
+                ${lunchIcons[
+                        (day - 1) %
+                        lunchIcons.length
+                        ]}
+              </span>
+            `
+
+                        :
+
+                        /*
+                         * Contenu d'une case normale.
+                         */
+                        `
+              <div class="cell-content">
+
+                ${course
+                            ? `
+                      <span
+                        class="course-pill"
+                        style="
+                          background:${course.color};
+                          border-color:${course.color}
+                        "
+                      >
+                        ${course.name}
+                      </span>
+                    `
+                            : ''
+                        }
+
+                ${group
+                            ? `
+                      <span class="group-text">
+                        ${group.name}
+                      </span>
+                    `
+                            : ''
+                        }
+
+                ${item.room
+                            ? `
+                      <span class="room-text">
+                        Local : ${item.room}
+                      </span>
+                    `
+                            : ''
+                        }
+
+                ${item.note
+                            ? `
+                      <span class="note-text">
+                        ${item.note}
+                      </span>
+                    `
+                            : ''
+                        }
+
+              </div>
+            `;
+
+
+                /*
+                 * Affichage de la cellule.
+                 */
+                grid.insertAdjacentHTML(
+                    'beforeend',
+
+                    `
+          <button
+            class="cell ${classes}"
+            data-cell="${cellKey}"
+            ${row.type === 'lunch'
+                        ? 'data-lunch="true"'
+                        : ''
+                    }
+            ${style}
+          >
+
+            <span class="placeholder">
+              ${row.label}
+            </span>
+
+            ${content}
+
+            ${state.hours
+                        ? `
+                  <span class="time-label">
+                    ${item.time ||
+                        row.defaultTime ||
+                        hourFor(rowIndex)
+                        }
+                  </span>
+                `
+                        : ''
+                    }
+
+          </button>
+          `
+                );
+            }
+        }
+    );
+
+
+    /*
+     * Boutons d'ajout AM/PM.
+     */
+    $$('.row-add').forEach(
+        button => {
+
+            button.addEventListener(
+                'click',
+                () => {
+
+                    if (
+                        button.dataset.add === 'am'
+                    ) {
+
+                        state.am =
+                            Math.min(
+                                5,
+                                state.am + 1
+                            );
+                    }
+
+                    if (
+                        button.dataset.add === 'pm'
+                    ) {
+
+                        state.pm =
+                            Math.min(
+                                5,
+                                state.pm + 1
+                            );
+                    }
+
+                    rebuildScheduleRows();
+
+                    persist();
+
+                    syncControls();
+
+                    renderGrid();
+                }
+            );
+        }
+    );
+
+
+    /*
+     * Ouverture d'une case.
+     */
+    $$('[data-cell]').forEach(
+        cell => {
+
+            cell.addEventListener(
+                'click',
+                () => {
+
+                    openCellDialog(
+                        cell.dataset.cell,
+                        cell.dataset.lunch === 'true'
+                    );
+
+                }
+            );
+
+        }
+    );
 }
 function syncControls(){
   if($('#amCount')) $('#amCount').value = state.am;
@@ -222,17 +1106,50 @@ function syncControls(){
   if($('#lunchToggle')) $('#lunchToggle').checked = state.lunch;
   if($('#hoursToggle')) $('#hoursToggle').checked = state.hours;
 }
-function openCellDialog(cellKey, isLunch){
-  if(isLunch || !$('#cellDialog')) return;
-  populateDialogOptions();
-  const item = state.data[cellKey] || {};
-  $('#editingKey').value = cellKey;
-  $('#cellCourse').value = item.courseId || '';
-  $('#cellGroup').value = item.groupId || '';
-  $('#cellRoom').value = item.room || '';
-  $('#cellTime').value = item.time || '';
-  $('#cellNote').value = item.note || '';
-  $('#cellDialog').showModal();
+function openCellDialog(
+    cellKey,
+    isLunch
+) {
+
+    /*
+     * Pour cette phase, le dîner
+     * reste non éditable directement.
+     *
+     * La personnalisation du dîner
+     * arrive en Phase 2.
+     */
+    if (
+        isLunch ||
+        !$('#cellDialog')
+    ) {
+        return;
+    }
+
+    populateDialogOptions();
+
+    const item =
+        state.schedule.cells[cellKey] ||
+        {};
+
+    $('#editingKey').value =
+        cellKey;
+
+    $('#cellCourse').value =
+        item.courseId || '';
+
+    $('#cellGroup').value =
+        item.groupId || '';
+
+    $('#cellRoom').value =
+        item.room || '';
+
+    $('#cellTime').value =
+        item.time || '';
+
+    $('#cellNote').value =
+        item.note || '';
+
+    $('#cellDialog').showModal();
 }
 
 function applyTheme(values, save=true){
@@ -268,44 +1185,506 @@ function currentThemeValues(){
     palette: $('#themePalette').value
   };
 }
-function bindBuilder(){
-  if(!$('#scheduleGrid')) return;
-  syncMetaFields(); bindMetaFields(); syncControls(); populateDialogOptions();
-  const initialTheme = state.themeOptions || themePresets[state.theme] || themePresets.forest;
-  applyTheme(initialTheme, false);
-  renderGrid();
-  $('#amCount')?.addEventListener('change', e => { state.am = Number(e.target.value); persist(); renderGrid(); });
-  $('#pmCount')?.addEventListener('change', e => { state.pm = Number(e.target.value); persist(); renderGrid(); });
-  $('#lunchToggle')?.addEventListener('change', e => { state.lunch = e.target.checked; persist(); renderGrid(); });
-  $('#hoursToggle')?.addEventListener('change', e => { state.hours = e.target.checked; persist(); renderGrid(); });
-  $('#dayCount')?.addEventListener('input', e => { state.days = Number(e.target.value); persist(); syncControls(); renderGrid(); });
-  $('#quickFill')?.addEventListener('click', () => {
-    rows().filter(r => r.type === 'course').forEach((r, i) => {
-      for(let d=1; d<=state.days; d++) state.data[key(r.slot,d)] = {courseId: state.courses[i % state.courses.length]?.id, groupId: state.groups[d % state.groups.length]?.id, room:'', time:hourFor(i), note:''};
-    }); persist(); renderGrid();
-  });
-  $('#clearGrid')?.addEventListener('click', () => { state.data = {}; persist(); renderGrid(); });
-  $('#saveLocal')?.addEventListener('click', () => { persist(); alert('Horaire sauvegardé dans ce navigateur.'); });
-  $('#loadLocal')?.addEventListener('click', () => { state = loadState(); syncMetaFields(); syncControls(); applyTheme(state.themeOptions || themePresets[state.theme] || themePresets.forest, false); renderGrid(); alert('Horaire chargé.'); });
-  $('#cellForm')?.addEventListener('submit', e => {
-    e.preventDefault();
-    state.data[$('#editingKey').value] = {courseId: $('#cellCourse').value, groupId: $('#cellGroup').value, room: $('#cellRoom').value.trim(), time: $('#cellTime').value, note: $('#cellNote').value.trim()};
-    persist(); $('#cellDialog').close(); renderGrid();
-  });
-  $('#deleteCell')?.addEventListener('click', () => { delete state.data[$('#editingKey').value]; persist(); $('#cellDialog').close(); renderGrid(); });
-  $$('.theme').forEach(btn => btn.addEventListener('click', () => {
-    $$('.theme').forEach(item => item.classList.remove('active'));
-    btn.classList.add('active'); state.theme = btn.dataset.theme; state.themeOptions = themePresets[btn.dataset.theme]; applyTheme(state.themeOptions); 
-  }));
-  ['themeFont','themeLine','themeAccent','themeTexture','themeImperfections','themeHeader','themeBackground','themePalette'].forEach(id => $('#'+id)?.addEventListener('change', () => applyTheme(currentThemeValues())));
-  $('#previewTheme')?.addEventListener('click', () => { applyTheme(currentThemeValues()); $('#scheduleWrapper')?.classList.add('theme-flash'); setTimeout(() => $('#scheduleWrapper')?.classList.remove('theme-flash'), 650); });
-  $('#toggleThemeEditor')?.addEventListener('click', () => {
-    const editor = $('#themeEditor'); editor.classList.toggle('collapsed'); $('#toggleThemeEditor').textContent = editor.classList.contains('collapsed') ? 'Ouvrir' : 'Fermer';
-  });
-  function preparePrint(){ syncPrintDetails(); document.body.classList.add('printing-schedule'); setTimeout(() => window.print(), 80); }
-  window.addEventListener('afterprint', () => document.body.classList.remove('printing-schedule'));
-  $('#printBtn')?.addEventListener('click', preparePrint);
-  $('#generateBtn')?.addEventListener('click', preparePrint);
+function bindBuilder() {
+
+    if (!$('#scheduleGrid')) {
+        return;
+    }
+
+    /*
+     * S'assurer que les données sont en v2.
+     */
+    ensureScheduleModel();
+
+    syncMetaFields();
+
+    bindMetaFields();
+
+    syncControls();
+
+    populateDialogOptions();
+
+
+    /*
+     * Thème initial.
+     */
+    const initialTheme =
+        state.themeOptions ||
+        themePresets[state.theme] ||
+        themePresets.forest;
+
+    applyTheme(
+        initialTheme,
+        false
+    );
+
+
+    /*
+     * Première génération de la grille.
+     */
+    renderGrid();
+
+
+    /*
+     * ==========================================================
+     * CONTRÔLES EXISTANTS
+     * ==========================================================
+     */
+
+    $('#amCount')?.addEventListener(
+        'change',
+        e => {
+
+            state.am =
+                Number(e.target.value);
+
+            rebuildScheduleRows();
+
+            persist();
+
+            renderGrid();
+        }
+    );
+
+
+    $('#pmCount')?.addEventListener(
+        'change',
+        e => {
+
+            state.pm =
+                Number(e.target.value);
+
+            rebuildScheduleRows();
+
+            persist();
+
+            renderGrid();
+        }
+    );
+
+
+    $('#lunchToggle')?.addEventListener(
+        'change',
+        e => {
+
+            state.lunch =
+                e.target.checked;
+
+            rebuildScheduleRows();
+
+            persist();
+
+            renderGrid();
+        }
+    );
+
+
+    $('#hoursToggle')?.addEventListener(
+        'change',
+        e => {
+
+            state.hours =
+                e.target.checked;
+
+            persist();
+
+            renderGrid();
+        }
+    );
+
+
+    $('#dayCount')?.addEventListener(
+        'input',
+        e => {
+
+            state.days =
+                Number(e.target.value);
+
+            persist();
+
+            syncControls();
+
+            renderGrid();
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * REMPLISSAGE RAPIDE
+     * ==========================================================
+     */
+
+    $('#quickFill')?.addEventListener(
+        'click',
+        () => {
+
+            rows()
+                .filter(
+                    row =>
+                        row.type === 'course'
+                )
+                .forEach(
+                    (row, i) => {
+
+                        for (
+                            let d = 1;
+                            d <= state.days;
+                            d++
+                        ) {
+
+                            state.schedule.cells[
+                                key(row.slot, d)
+                            ] = normalizeCell({
+
+                                courseId:
+                                    state
+                                        .courses[
+                                        i %
+                                        state.courses.length
+                                    ]?.id || '',
+
+                                groupId:
+                                    state
+                                        .groups[
+                                        d %
+                                        state.groups.length
+                                    ]?.id || '',
+
+                                room: '',
+
+                                time:
+                                    row.defaultTime ||
+                                    hourFor(i),
+
+                                note: ''
+                            });
+                        }
+                    }
+                );
+
+            /*
+             * Alias de compatibilité.
+             */
+            state.data =
+                state.schedule.cells;
+
+            persist();
+
+            renderGrid();
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * EFFACER LA GRILLE
+     * ==========================================================
+     */
+
+    $('#clearGrid')?.addEventListener(
+        'click',
+        () => {
+
+            state.schedule.cells = {};
+
+            state.data =
+                state.schedule.cells;
+
+            persist();
+
+            renderGrid();
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * SAUVEGARDE LOCALE
+     * ==========================================================
+     */
+
+    $('#saveLocal')?.addEventListener(
+        'click',
+        () => {
+
+            persist();
+
+            alert(
+                'Horaire sauvegardé dans ce navigateur.'
+            );
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * CHARGEMENT LOCAL
+     * ==========================================================
+     */
+
+    $('#loadLocal')?.addEventListener(
+        'click',
+        () => {
+
+            state =
+                loadState();
+
+            syncMetaFields();
+
+            syncControls();
+
+            applyTheme(
+                state.themeOptions ||
+                themePresets[state.theme] ||
+                themePresets.forest,
+                false
+            );
+
+            renderGrid();
+
+            alert(
+                'Horaire chargé.'
+            );
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * ÉDITION D'UNE CASE
+     * ==========================================================
+     */
+
+    $('#cellForm')?.addEventListener(
+        'submit',
+        e => {
+
+            e.preventDefault();
+
+            const cellKey =
+                $('#editingKey').value;
+
+            state.schedule.cells[cellKey] =
+                normalizeCell({
+
+                    courseId:
+                        $('#cellCourse').value,
+
+                    groupId:
+                        $('#cellGroup').value,
+
+                    room:
+                        $('#cellRoom')
+                            .value
+                            .trim(),
+
+                    time:
+                        $('#cellTime').value,
+
+                    note:
+                        $('#cellNote')
+                            .value
+                            .trim()
+                });
+
+
+            /*
+             * Maintien de l'ancien alias.
+             */
+            state.data =
+                state.schedule.cells;
+
+            persist();
+
+            $('#cellDialog').close();
+
+            renderGrid();
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * SUPPRESSION D'UNE CASE
+     * ==========================================================
+     */
+
+    $('#deleteCell')?.addEventListener(
+        'click',
+        () => {
+
+            const cellKey =
+                $('#editingKey').value;
+
+            delete state.schedule.cells[
+                cellKey
+            ];
+
+            state.data =
+                state.schedule.cells;
+
+            persist();
+
+            $('#cellDialog').close();
+
+            renderGrid();
+        }
+    );
+
+
+    /*
+     * ==========================================================
+     * THÈMES
+     * ==========================================================
+     */
+
+    $$('.theme').forEach(
+        btn => {
+
+            btn.addEventListener(
+                'click',
+                () => {
+
+                    $$('.theme').forEach(
+                        item =>
+                            item.classList.remove(
+                                'active'
+                            )
+                    );
+
+                    btn.classList.add(
+                        'active'
+                    );
+
+                    state.theme =
+                        btn.dataset.theme;
+
+                    state.themeOptions =
+                        themePresets[
+                        btn.dataset.theme
+                        ];
+
+                    applyTheme(
+                        state.themeOptions
+                    );
+                }
+            );
+        }
+    );
+
+
+    [
+        'themeFont',
+        'themeLine',
+        'themeAccent',
+        'themeTexture',
+        'themeImperfections',
+        'themeHeader',
+        'themeBackground',
+        'themePalette'
+    ].forEach(
+        id => {
+
+            $('#' + id)?.addEventListener(
+                'change',
+                () =>
+                    applyTheme(
+                        currentThemeValues()
+                    )
+            );
+
+        }
+    );
+
+
+    $('#previewTheme')?.addEventListener(
+        'click',
+        () => {
+
+            applyTheme(
+                currentThemeValues()
+            );
+
+            $('#scheduleWrapper')
+                ?.classList
+                .add('theme-flash');
+
+            setTimeout(
+                () =>
+                    $('#scheduleWrapper')
+                        ?.classList
+                        .remove(
+                            'theme-flash'
+                        ),
+                650
+            );
+        }
+    );
+
+
+    $('#toggleThemeEditor')
+        ?.addEventListener(
+            'click',
+            () => {
+
+                const editor =
+                    $('#themeEditor');
+
+                editor.classList.toggle(
+                    'collapsed'
+                );
+
+                $('#toggleThemeEditor')
+                    .textContent =
+                    editor.classList.contains(
+                        'collapsed'
+                    )
+                        ? 'Ouvrir'
+                        : 'Fermer';
+            }
+        );
+
+
+    /*
+     * ==========================================================
+     * IMPRESSION
+     * ==========================================================
+     */
+
+    function preparePrint() {
+
+        syncPrintDetails();
+
+        document.body.classList.add(
+            'printing-schedule'
+        );
+
+        setTimeout(
+            () => window.print(),
+            80
+        );
+    }
+
+    window.addEventListener(
+        'afterprint',
+        () =>
+            document.body.classList.remove(
+                'printing-schedule'
+            )
+    );
+
+    $('#printBtn')
+        ?.addEventListener(
+            'click',
+            preparePrint
+        );
+
+    $('#generateBtn')
+        ?.addEventListener(
+            'click',
+            preparePrint
+        );
 }
 
 function renderLibrary(){
@@ -348,8 +1727,42 @@ function renderGroupStudents(){
 function bindGroups(){
   if(!$('#groupTabs')) return;
   renderGroupWorkspace();
-  $('#newGroupBtn')?.addEventListener('click', () => { const id = makeId('g'); state.groups.push({id, name:'Nouveau groupe', level:'', teacher:'', room:'', notes:''}); state.selectedGroupId = id; persist(); renderGroupWorkspace(); });
-  $('#saveGroupDetails')?.addEventListener('click', () => { const group = getGroup(state.selectedGroupId); if(!group) return; group.name = $('#editGroupName').value.trim() || 'Groupe sans nom'; group.level = $('#editGroupLevel').value.trim(); group.teacher = $('#editGroupTeacher').value.trim(); group.room = $('#editGroupRoom').value.trim(); group.notes = $('#editGroupNotes').value.trim(); persist(); renderGroupWorkspace(); });
+    $('#newGroupBtn')?.addEventListener(
+        'click',
+        () => {
+
+            const id =
+                makeId('g');
+
+            state.groups.push({
+
+                id,
+
+                name:
+                    'Nouveau groupe',
+
+                level: '',
+
+                teacher: '',
+
+                room: '',
+
+                notes: '',
+
+                /*
+                 * Nouvelle propriété Phase 1.
+                 */
+                color: '#4f7cff'
+            });
+
+            state.selectedGroupId =
+                id;
+
+            persist();
+
+            renderGroupWorkspace();
+        }
+    );
   $('#deleteGroupBtn')?.addEventListener('click', () => { const id = state.selectedGroupId; state.groups = state.groups.filter(g => g.id !== id); state.students = state.students.filter(s => s.groupId !== id); Object.values(state.data).forEach(cell => { if(cell.groupId === id) cell.groupId = ''; }); state.selectedGroupId = state.groups[0]?.id || ''; persist(); renderGroupWorkspace(); });
   $('#addStudentToGroup')?.addEventListener('click', () => { const name = $('#newStudentName').value.trim(); if(!name || !state.selectedGroupId) return; state.students.push({id:makeId('s'), name, groupId:state.selectedGroupId, info:$('#newStudentInfo').value.trim()}); $('#newStudentName').value=''; $('#newStudentInfo').value=''; persist(); renderGroupStudents(); });
 }
