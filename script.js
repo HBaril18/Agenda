@@ -2084,3 +2084,2167 @@ function bindAdvancedGroupTools(){
   ensureAdvancedGroupData(); persist(); bindGroupToolTabs(); bindAdvancedSeating(); bindStageTools(); renderGroupWorkspace();
 }
 
+/* ============================================================
+   PLANIFPROF — PHASE 2
+   GESTION FLEXIBLE DU TEMPS
+   ============================================================
+
+   Installation :
+   - conserver tout le script existant
+   - coller ce bloc tout à la fin
+   - aucun autre code à supprimer
+
+   Fonctionnalités :
+   ✓ heure par ligne
+   ✓ heure par case
+   ✓ dîner individuel par jour
+   ✓ pause / récréation personnalisable
+   ✓ ajout de pauses
+   ✓ suppression de pauses
+   ✓ texte personnalisé
+   ✓ couleur du groupe
+   ✓ compatibilité v2
+   ============================================================ */
+
+(function PlanifProfPhase2() {
+
+    'use strict';
+
+
+    /*
+     * ----------------------------------------------------------
+     * État interne
+     * ----------------------------------------------------------
+     */
+
+    let phase2Ready = false;
+
+
+    const PHASE2_DEFAULT_BREAK_HEIGHT = 55;
+
+
+    /*
+     * ----------------------------------------------------------
+     * Utilitaires
+     * ----------------------------------------------------------
+     */
+
+    function p2$(selector) {
+        return document.querySelector(selector);
+    }
+
+
+    function p2$$(selector) {
+        return Array.from(
+            document.querySelectorAll(selector)
+        );
+    }
+
+
+    function p2EnsureModel() {
+
+        if (
+            !window.state &&
+            typeof state === 'undefined'
+        ) {
+            return false;
+        }
+
+
+        if (
+            !state.schedule
+        ) {
+            state.schedule = {
+                rows: [],
+                cells: {},
+                settings: {
+                    rowHeight: 90,
+                    cellWidth: null
+                }
+            };
+        }
+
+
+        if (
+            !Array.isArray(
+                state.schedule.rows
+            )
+        ) {
+            state.schedule.rows = [];
+        }
+
+
+        if (
+            !state.schedule.cells ||
+            typeof state.schedule.cells !== 'object'
+        ) {
+            state.schedule.cells =
+                state.data || {};
+        }
+
+
+        /*
+         * Compatibilité avec l'ancien code.
+         */
+        state.data =
+            state.schedule.cells;
+
+
+        return true;
+    }
+
+
+    function p2NormalizeCell(cell) {
+
+        const source =
+            cell &&
+                typeof cell === 'object'
+                ? cell
+                : {};
+
+
+        return {
+
+            ...source,
+
+            courseId:
+                source.courseId || '',
+
+            groupId:
+                source.groupId || '',
+
+            room:
+                source.room || '',
+
+            time:
+                source.time || '',
+
+            note:
+                source.note || '',
+
+            type:
+                source.type || 'course',
+
+            label:
+                source.label || '',
+
+            groupColorMode:
+                source.groupColorMode ||
+                'dot',
+
+            text: {
+
+                color: '',
+
+                align: 'center',
+
+                vertical: 'center',
+
+                wrap: true,
+
+                showGenericLabel: true,
+
+                ...(source.text || {})
+
+            },
+
+            size: {
+
+                width: null,
+
+                height: null,
+
+                ...(source.size || {})
+
+            }
+
+        };
+
+    }
+
+
+    function p2GetRow(rowId) {
+
+        return (
+            state.schedule.rows || []
+        ).find(
+            row =>
+                row.id === rowId
+        );
+
+    }
+
+
+    function p2CellKey(rowId, day) {
+
+        return `${rowId}-${day}`;
+
+    }
+
+
+    function p2GetCell(rowId, day) {
+
+        const cellKey =
+            p2CellKey(
+                rowId,
+                day
+            );
+
+
+        if (
+            !state.schedule.cells[
+            cellKey
+            ]
+        ) {
+
+            const row =
+                p2GetRow(rowId);
+
+
+            state.schedule.cells[
+                cellKey
+            ] =
+                p2NormalizeCell({
+
+                    type:
+                        row?.type ||
+                        'course',
+
+                    time:
+                        row?.defaultTime ||
+                        ''
+
+                });
+
+        }
+
+
+        return state.schedule.cells[
+            cellKey
+        ];
+
+    }
+
+
+    function p2Persist() {
+
+        state.data =
+            state.schedule.cells;
+
+
+        if (
+            typeof persist === 'function'
+        ) {
+            persist();
+        }
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Création d'une pause
+     * ----------------------------------------------------------
+     */
+
+    function p2CreateBreak() {
+
+        p2EnsureModel();
+
+
+        const existing =
+            state.schedule.rows
+                .filter(
+                    row =>
+                        row.type === 'break'
+                );
+
+
+        const number =
+            existing.length + 1;
+
+
+        const breakRow = {
+
+            id:
+                'break-' +
+                Date.now().toString(36) +
+                '-' +
+                Math.random()
+                    .toString(36)
+                    .slice(2, 7),
+
+            type:
+                'break',
+
+            label:
+                `Récréation ${number}`,
+
+            defaultTime:
+                '',
+
+            height:
+                PHASE2_DEFAULT_BREAK_HEIGHT
+
+        };
+
+
+        /*
+         * On place la pause avant le premier
+         * PM lorsqu'il existe.
+         */
+        const pmIndex =
+            state.schedule.rows.findIndex(
+                row =>
+                    String(row.id)
+                        .startsWith('pm')
+            );
+
+
+        if (pmIndex >= 0) {
+
+            state.schedule.rows.splice(
+                pmIndex,
+                0,
+                breakRow
+            );
+
+        } else {
+
+            state.schedule.rows.push(
+                breakRow
+            );
+
+        }
+
+
+        p2Persist();
+
+        p2RenderGrid();
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Suppression d'une pause
+     * ----------------------------------------------------------
+     */
+
+    function p2DeleteBreak(rowId) {
+
+        p2EnsureModel();
+
+
+        const row =
+            p2GetRow(rowId);
+
+
+        if (!row) {
+            return;
+        }
+
+
+        if (
+            row.type !== 'break'
+        ) {
+            return;
+        }
+
+
+        const confirmed =
+            window.confirm(
+                `Supprimer « ${row.label || 'Récréation'} » ?`
+            );
+
+
+        if (!confirmed) {
+            return;
+        }
+
+
+        state.schedule.rows =
+            state.schedule.rows.filter(
+                item =>
+                    item.id !== rowId
+            );
+
+
+        /*
+         * Supprimer également les cases
+         * de cette ligne.
+         */
+        Object.keys(
+            state.schedule.cells
+        ).forEach(
+            cellKey => {
+
+                if (
+                    cellKey.startsWith(
+                        `${rowId}-`
+                    )
+                ) {
+
+                    delete state
+                        .schedule
+                        .cells[
+                        cellKey
+                    ];
+
+                }
+
+            }
+        );
+
+
+        p2Persist();
+
+        p2RenderGrid();
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Modification de l'heure d'une ligne
+     * ----------------------------------------------------------
+     */
+
+    function p2ApplyRowTime(
+        rowId,
+        time
+    ) {
+
+        p2EnsureModel();
+
+
+        const row =
+            p2GetRow(rowId);
+
+
+        if (!row) {
+            return;
+        }
+
+
+        row.defaultTime =
+            time;
+
+
+        /*
+         * Applique l'heure à TOUTES
+         * les cases de la ligne.
+         */
+        for (
+            let day = 1;
+            day <= Number(state.days || 0);
+            day++
+        ) {
+
+            const cell =
+                p2GetCell(
+                    rowId,
+                    day
+                );
+
+
+            cell.time =
+                time;
+
+        }
+
+
+        p2Persist();
+
+        p2RenderGrid();
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Édition d'une cellule spéciale
+     * ----------------------------------------------------------
+     */
+
+    function p2EnsureDialogFields() {
+
+        const dialog =
+            p2$('#cellDialog');
+
+
+        if (!dialog) {
+            return;
+        }
+
+
+        /*
+         * Si les champs existent déjà,
+         * ne rien faire.
+         */
+        if (
+            p2$('#p2CellType')
+        ) {
+            return;
+        }
+
+
+        const form =
+            p2$('#cellForm');
+
+
+        if (!form) {
+            return;
+        }
+
+
+        const existingGrid =
+            form.querySelector(
+                '.dialog-grid'
+            );
+
+
+        if (!existingGrid) {
+            return;
+        }
+
+
+        /*
+         * TYPE
+         */
+        const typeLabel =
+            document.createElement(
+                'label'
+            );
+
+
+        typeLabel.id =
+            'p2CellTypeField';
+
+
+        typeLabel.innerHTML = `
+
+            Type
+
+            <select
+                id="p2CellType"
+            >
+
+                <option value="course">
+                    Cours
+                </option>
+
+                <option value="lunch">
+                    Dîner
+                </option>
+
+                <option value="break">
+                    Récréation / Pause
+                </option>
+
+            </select>
+
+        `;
+
+
+        /*
+         * TEXTE
+         */
+        const textLabel =
+            document.createElement(
+                'label'
+            );
+
+
+        textLabel.id =
+            'p2CellLabelField';
+
+
+        textLabel.className =
+            'p2-special-field';
+
+
+        textLabel.innerHTML = `
+
+            Texte affiché
+
+            <input
+                id="p2CellLabel"
+                type="text"
+                maxlength="100"
+                placeholder="Ex. Surveillance"
+            >
+
+        `;
+
+
+        existingGrid.prepend(
+            textLabel
+        );
+
+
+        existingGrid.prepend(
+            typeLabel
+        );
+
+
+        /*
+         * Ajouter un bouton supprimer
+         * une pause directement au dialogue.
+         */
+        const actions =
+            form.querySelector(
+                '.dialog-actions'
+            );
+
+
+        if (actions) {
+
+            const deleteBreak =
+                document.createElement(
+                    'button'
+                );
+
+
+            deleteBreak.type =
+                'button';
+
+
+            deleteBreak.id =
+                'p2DeleteBreak';
+
+
+            deleteBreak.className =
+                'btn btn-danger p2-delete-break';
+
+
+            deleteBreak.textContent =
+                'Supprimer la pause';
+
+
+            actions.prepend(
+                deleteBreak
+            );
+
+
+            deleteBreak.addEventListener(
+                'click',
+                () => {
+
+                    const cellKey =
+                        p2$('#editingKey')
+                            ?.value;
+
+
+                    if (!cellKey) {
+                        return;
+                    }
+
+
+                    const rowId =
+                        cellKey.split('-')[0];
+
+
+                    p2DeleteBreak(
+                        rowId
+                    );
+
+
+                    p2$('#cellDialog')
+                        ?.close();
+
+                }
+            );
+
+        }
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Ouvre notre dialogue Phase 2
+     * ----------------------------------------------------------
+     */
+
+    function p2OpenDialog(
+        cellKey
+    ) {
+
+        p2EnsureModel();
+
+        p2EnsureDialogFields();
+
+
+        const dialog =
+            p2$('#cellDialog');
+
+
+        if (!dialog) {
+            return;
+        }
+
+
+        const rowId =
+            cellKey.split('-')[0];
+
+
+        const row =
+            p2GetRow(rowId);
+
+
+        if (!row) {
+            return;
+        }
+
+
+        const cell =
+            state.schedule.cells[
+            cellKey
+            ] ||
+            p2NormalizeCell({
+
+                type:
+                    row.type,
+
+                time:
+                    row.defaultTime
+
+            });
+
+
+        /*
+         * Sauvegarde de la cellule.
+         */
+        state.schedule.cells[
+            cellKey
+        ] =
+            p2NormalizeCell(cell);
+
+
+        p2$('#editingKey').value =
+            cellKey;
+
+
+        /*
+         * Type.
+         */
+        const type =
+            p2$('#p2CellType');
+
+
+        if (type) {
+
+            type.value =
+                row.type ||
+                cell.type ||
+                'course';
+
+        }
+
+
+        /*
+         * Texte spécial.
+         */
+        const label =
+            p2$('#p2CellLabel');
+
+
+        if (label) {
+
+            label.value =
+                cell.label ||
+                row.label ||
+                '';
+
+        }
+
+
+        /*
+         * Champs existants.
+         */
+        const course =
+            p2$('#cellCourse');
+
+
+        const group =
+            p2$('#cellGroup');
+
+
+        const room =
+            p2$('#cellRoom');
+
+
+        const time =
+            p2$('#cellTime');
+
+
+        const note =
+            p2$('#cellNote');
+
+
+        if (
+            typeof populateDialogOptions ===
+            'function'
+        ) {
+
+            populateDialogOptions();
+
+        }
+
+
+        if (course) {
+
+            course.value =
+                cell.courseId ||
+                '';
+
+        }
+
+
+        if (group) {
+
+            group.value =
+                cell.groupId ||
+                '';
+
+        }
+
+
+        if (room) {
+
+            room.value =
+                cell.room ||
+                '';
+
+        }
+
+
+        if (time) {
+
+            time.value =
+                cell.time ||
+                row.defaultTime ||
+                '';
+
+        }
+
+
+        if (note) {
+
+            note.value =
+                cell.note ||
+                '';
+
+        }
+
+
+        p2UpdateDialogVisibility();
+
+
+        /*
+         * Titre.
+         */
+        const title =
+            dialog.querySelector(
+                '#cellDialogTitle, h3'
+            );
+
+
+        if (title) {
+
+            title.textContent =
+                row.type === 'lunch'
+                    ? 'Modifier le dîner'
+                    : row.type === 'break'
+                        ? 'Modifier la pause'
+                        : 'Modifier la case';
+
+        }
+
+
+        if (
+            typeof dialog.showModal ===
+            'function'
+        ) {
+
+            dialog.showModal();
+
+        }
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Affichage dynamique du dialogue
+     * ----------------------------------------------------------
+     */
+
+    function p2UpdateDialogVisibility() {
+
+        const type =
+            p2$('#p2CellType')?.value ||
+            'course';
+
+
+        const special =
+            type === 'lunch' ||
+            type === 'break';
+
+
+        [
+            '#cellCourse',
+            '#cellGroup',
+            '#cellRoom'
+        ].forEach(
+            selector => {
+
+                const element =
+                    p2$(selector);
+
+
+                const field =
+                    element?.closest(
+                        'label'
+                    );
+
+
+                if (field) {
+
+                    field.classList.toggle(
+                        'p2-hidden-field',
+                        special
+                    );
+
+                }
+
+            }
+        );
+
+
+        const labelField =
+            p2$('#p2CellLabelField');
+
+
+        if (labelField) {
+
+            labelField.classList.toggle(
+                'p2-hidden-field',
+                !special
+            );
+
+        }
+
+
+        /*
+         * Suppression d'une pause
+         * seulement si c'est une pause.
+         */
+        const deleteButton =
+            p2$('#p2DeleteBreak');
+
+
+        if (deleteButton) {
+
+            deleteButton.style.display =
+                type === 'break'
+                    ? ''
+                    : 'none';
+
+        }
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Sauvegarde du dialogue Phase 2
+     * ----------------------------------------------------------
+     */
+
+    function p2SaveDialog() {
+
+        p2EnsureModel();
+
+
+        const cellKey =
+            p2$('#editingKey')
+                ?.value;
+
+
+        if (!cellKey) {
+            return;
+        }
+
+
+        const rowId =
+            cellKey.split('-')[0];
+
+
+        const row =
+            p2GetRow(rowId);
+
+
+        if (!row) {
+            return;
+        }
+
+
+        const type =
+            p2$('#p2CellType')
+                ?.value ||
+            row.type ||
+            'course';
+
+
+        const time =
+            p2$('#cellTime')
+                ?.value ||
+            row.defaultTime ||
+            '';
+
+
+        const label =
+            p2$('#p2CellLabel')
+                ?.value
+                .trim() ||
+            '';
+
+
+        const courseId =
+            type === 'course'
+                ? (
+                    p2$('#cellCourse')
+                        ?.value ||
+                    ''
+                )
+                : '';
+
+
+        const groupId =
+            type === 'course'
+                ? (
+                    p2$('#cellGroup')
+                        ?.value ||
+                    ''
+                )
+                : '';
+
+
+        const room =
+            type === 'course'
+                ? (
+                    p2$('#cellRoom')
+                        ?.value
+                        .trim() ||
+                    ''
+                )
+                : '';
+
+
+        const note =
+            p2$('#cellNote')
+                ?.value
+                .trim() ||
+            '';
+
+
+        /*
+         * Mettre à jour la ligne
+         * lorsque l'utilisateur choisit
+         * Dîner / Pause.
+         */
+        row.type =
+            type;
+
+
+        if (type === 'lunch') {
+
+            if (label) {
+                row.label =
+                    label;
+            } else if (
+                !row.label ||
+                row.label.startsWith('Cours')
+            ) {
+                row.label =
+                    'Dîner';
+            }
+
+        }
+
+
+        if (type === 'break') {
+
+            if (label) {
+
+                row.label =
+                    label;
+
+            } else if (
+                !row.label ||
+                row.label.startsWith('Cours')
+            ) {
+
+                row.label =
+                    'Récréation';
+
+            }
+
+        }
+
+
+        /*
+         * Important :
+         * le label est stocké dans la cellule.
+         *
+         * Cela permet à chaque journée
+         * d'avoir un texte différent.
+         */
+        state.schedule.cells[
+            cellKey
+        ] =
+            p2NormalizeCell({
+
+                courseId,
+
+                groupId,
+
+                room,
+
+                time,
+
+                note,
+
+                type,
+
+                label:
+                    label ||
+                    row.label
+
+            });
+
+
+        /*
+         * L'heure saisie pour une nouvelle ligne
+         * devient sa valeur par défaut.
+         */
+        if (
+            !row.defaultTime &&
+            time
+        ) {
+
+            row.defaultTime =
+                time;
+
+        }
+
+
+        p2Persist();
+
+
+        p2$('#cellDialog')
+            ?.close();
+
+
+        p2RenderGrid();
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Rendu complet de la grille
+     * ----------------------------------------------------------
+     */
+
+    function p2RenderGrid() {
+
+        if (
+            !p2EnsureModel()
+        ) {
+            return;
+        }
+
+
+        const grid =
+            p2$('#scheduleGrid');
+
+
+        if (!grid) {
+            return;
+        }
+
+
+        const days =
+            Number(
+                state.days || 1
+            );
+
+
+        grid.style.setProperty(
+            '--days',
+            days
+        );
+
+
+        /*
+         * En-tête.
+         */
+        grid.innerHTML = `
+
+            <div
+                class="schedule-corner p2-time-header"
+            >
+                Heure
+            </div>
+
+            ${Array
+                .from(
+                    {
+                        length: days
+                    },
+                    (_, index) => `
+                            <div
+                                class="day-title"
+                                role="columnheader"
+                            >
+                                Jour ${index + 1}
+                            </div>
+                        `
+                )
+                .join('')
+            }
+
+        `;
+
+
+        const lunchIcons = [
+            '🍎',
+            '🍉',
+            '🥪',
+            '🍓',
+            '🥗',
+            '🍊',
+            '🍒',
+            '🥝',
+            '🍐',
+            '🧁'
+        ];
+
+
+        /*
+         * Toutes les lignes.
+         */
+        state.schedule.rows
+            .forEach(
+                (
+                    row,
+                    rowIndex
+                ) => {
+
+                    /*
+                     * ------------------------------------------------
+                     * Colonne heure
+                     * ------------------------------------------------
+                     */
+                    grid.insertAdjacentHTML(
+                        'beforeend',
+                        `
+
+                            <div
+                                class="
+                                    row-time-editor
+                                    ${row.type === 'lunch' ||
+                            row.type === 'break'
+                            ? 'row-time-special'
+                            : ''
+                        }
+                                "
+                            >
+
+                                <span
+                                    class="row-time-label"
+                                >
+                                    ${row.label || ''}
+                                </span>
+
+                                <input
+                                    type="time"
+                                    class="row-time-input"
+                                    data-p2-row-time="${row.id}"
+                                    value="${row.defaultTime ||
+                        ''
+                        }"
+                                    aria-label="
+                                        Heure de ${row.label || 'la période'}
+                                    "
+                                >
+
+                            </div>
+
+                        `
+                    );
+
+
+                    /*
+                     * ------------------------------------------------
+                     * Cases
+                     * ------------------------------------------------
+                     */
+                    for (
+                        let day = 1;
+                        day <= days;
+                        day++
+                    ) {
+
+                        const cellKey =
+                            p2CellKey(
+                                row.id,
+                                day
+                            );
+
+
+                        const existing =
+                            state.schedule.cells[
+                            cellKey
+                            ];
+
+
+                        const cell =
+                            p2NormalizeCell(
+                                existing || {
+                                    type:
+                                        row.type,
+
+                                    time:
+                                        row.defaultTime
+                                }
+                            );
+
+
+                        const course =
+                            typeof getCourse ===
+                                'function'
+                                ? getCourse(
+                                    cell.courseId
+                                )
+                                : null;
+
+
+                        const group =
+                            typeof getGroup ===
+                                'function'
+                                ? getGroup(
+                                    cell.groupId
+                                )
+                                : null;
+
+
+                        const groupColor =
+                            group?.color ||
+                            '#4f7cff';
+
+
+                        const courseColor =
+                            course?.color ||
+                            '#4f7cff';
+
+
+                        const effectiveType =
+                            cell.type ||
+                            row.type ||
+                            'course';
+
+
+                        const effectiveTime =
+                            cell.time ||
+                            row.defaultTime ||
+                            '';
+
+
+                        /*
+                         * ------------------------------------------------
+                         * Dîner / pause
+                         * ------------------------------------------------
+                         */
+                        if (
+                            effectiveType === 'lunch' ||
+                            effectiveType === 'break'
+                        ) {
+
+                            const defaultLabel =
+                                effectiveType === 'lunch'
+                                    ? 'Dîner'
+                                    : 'Récréation';
+
+
+                            const label =
+                                cell.label ||
+                                row.label ||
+                                defaultLabel;
+
+
+                            const icon =
+                                effectiveType === 'lunch'
+                                    ? lunchIcons[
+                                    (
+                                        day - 1
+                                    ) %
+                                    lunchIcons.length
+                                    ]
+                                    : '☕';
+
+
+                            grid.insertAdjacentHTML(
+                                'beforeend',
+                                `
+
+                                    <button
+                                        type="button"
+                                        class="
+                                            cell
+                                            ${effectiveType === 'lunch'
+                                    ? 'lunch-cell'
+                                    : 'break-cell'
+                                }
+                                            p2-special-cell
+                                        "
+                                        data-p2-cell="${cellKey}"
+                                        style="
+                                            --group-color:${groupColor};
+                                        "
+                                        aria-label="
+                                            ${label}
+                                            ${effectiveTime
+                                    ? `, ${effectiveTime}`
+                                    : ''
+                                }
+                                        "
+                                    >
+
+                                        <span
+                                            class="p2-special-icon"
+                                            aria-hidden="true"
+                                        >
+                                            ${icon}
+                                        </span>
+
+                                        <div
+                                            class="
+                                                cell-content
+                                                p2-special-content
+                                            "
+                                        >
+
+                                            <strong
+                                                class="
+                                                    p2-special-label
+                                                "
+                                            >
+                                                ${label}
+                                            </strong>
+
+                                            ${effectiveTime
+                                    ? `
+                                                        <span
+                                                            class="time-label"
+                                                        >
+                                                            ${effectiveTime}
+                                                        </span>
+                                                    `
+                                    : ''
+                                }
+
+                                        </div>
+
+                                    </button>
+
+                                `
+                            );
+
+
+                            continue;
+
+                        }
+
+
+                        /*
+                         * ------------------------------------------------
+                         * Case normale
+                         * ------------------------------------------------
+                         */
+
+                        const mode =
+                            cell.groupColorMode ||
+                            'dot';
+
+
+                        let groupIndicator =
+                            '';
+
+
+                        if (group) {
+
+                            if (
+                                mode === 'dot'
+                            ) {
+
+                                groupIndicator = `
+
+                                    <span
+                                        class="
+                                            group-color-dot
+                                        "
+                                        style="
+                                            background:${groupColor}
+                                        "
+                                        title="
+                                            ${group.name}
+                                        "
+                                    ></span>
+
+                                `;
+
+                            }
+
+                        }
+
+
+                        const classes = [
+
+                            'cell',
+
+                            course
+                                ? 'course-filled'
+                                : '',
+
+                            group
+                                ? 'has-group'
+                                : '',
+
+                            mode === 'border'
+                                ? 'p2-group-border'
+                                : '',
+
+                            mode === 'background'
+                                ? 'p2-group-background'
+                                : ''
+
+                        ]
+                            .filter(Boolean)
+                            .join(' ');
+
+
+                        grid.insertAdjacentHTML(
+                            'beforeend',
+                            `
+
+                                <button
+                                    type="button"
+                                    class="${classes}"
+                                    data-p2-cell="${cellKey}"
+                                    style="
+                                        --course-color:${courseColor};
+                                        --group-color:${groupColor};
+                                    "
+                                    aria-label="
+                                        ${course?.name ||
+                            row.label ||
+                            'Case'
+                            }
+                                    "
+                                >
+
+                                    <span
+                                        class="placeholder"
+                                    >
+                                        ${cell.text?.showGenericLabel === false
+                                ? ''
+                                : (
+                                    row.label ||
+                                    ''
+                                )
+                            }
+                                    </span>
+
+
+                                    <div
+                                        class="cell-content"
+                                    >
+
+                                        ${course
+                                ? `
+                                                    <span
+                                                        class="course-pill"
+                                                        style="
+                                                            background:${courseColor};
+                                                            border-color:${courseColor}
+                                                        "
+                                                    >
+                                                        ${course.name}
+                                                    </span>
+                                                `
+                                : ''
+                            }
+
+
+                                        ${group
+                                ? `
+                                                    <span
+                                                        class="group-text"
+                                                    >
+                                                        ${groupIndicator}
+                                                        ${group.name}
+                                                    </span>
+                                                `
+                                : ''
+                            }
+
+
+                                        ${cell.room
+                                ? `
+                                                    <span
+                                                        class="room-text"
+                                                    >
+                                                        Local :
+                                                        ${cell.room}
+                                                    </span>
+                                                `
+                                : ''
+                            }
+
+
+                                        ${cell.note
+                                ? `
+                                                    <span
+                                                        class="note-text"
+                                                    >
+                                                        ${cell.note}
+                                                    </span>
+                                                `
+                                : ''
+                            }
+
+
+                                        ${effectiveTime
+                                ? `
+                                                    <span
+                                                        class="time-label"
+                                                    >
+                                                        ${effectiveTime}
+                                                    </span>
+                                                `
+                                : ''
+                            }
+
+                                    </div>
+
+                                </button>
+
+                            `
+                        );
+
+                    }
+
+                }
+            );
+
+
+        /*
+         * ----------------------------------------------------------
+         * Écouteurs heure des lignes
+         * ----------------------------------------------------------
+         */
+
+        p2$$(
+            '[data-p2-row-time]'
+        ).forEach(
+            input => {
+
+                input.addEventListener(
+                    'change',
+                    () => {
+
+                        p2ApplyRowTime(
+                            input.dataset.p2RowTime,
+                            input.value
+                        );
+
+                    }
+                );
+
+            }
+        );
+
+
+        /*
+         * ----------------------------------------------------------
+         * Écouteurs des cellules
+         * ----------------------------------------------------------
+         */
+
+        p2$$(
+            '[data-p2-cell]'
+        ).forEach(
+            cell => {
+
+                cell.addEventListener(
+                    'click',
+                    () => {
+
+                        p2OpenDialog(
+                            cell.dataset.p2Cell
+                        );
+
+                    }
+                );
+
+            }
+        );
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Installation du dialogue
+     * ----------------------------------------------------------
+     */
+
+    function p2InstallDialog() {
+
+        const form =
+            p2$('#cellForm');
+
+
+        if (!form) {
+            return;
+        }
+
+
+        p2EnsureDialogFields();
+
+
+        /*
+         * IMPORTANT :
+         *
+         * On clone le formulaire afin de supprimer
+         * les anciens listeners du Phase 1.
+         *
+         * Cela évite que deux sauvegardes se déclenchent.
+         */
+        const replacement =
+            form.cloneNode(true);
+
+
+        form.parentNode.replaceChild(
+            replacement,
+            form
+        );
+
+
+        /*
+         * Recréer les champs Phase 2
+         * après le clonage.
+         */
+        p2EnsureDialogFields();
+
+
+        const newForm =
+            p2$('#cellForm');
+
+
+        if (!newForm) {
+            return;
+        }
+
+
+        newForm.addEventListener(
+            'submit',
+            event => {
+
+                event.preventDefault();
+
+                p2SaveDialog();
+
+            }
+        );
+
+
+        p2$('#p2CellType')
+            ?.addEventListener(
+                'change',
+                p2UpdateDialogVisibility
+            );
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Barre d'outils
+     * ----------------------------------------------------------
+     */
+
+    function p2InstallToolbar() {
+
+        if (
+            p2$('#phase2Toolbar')
+        ) {
+            return;
+        }
+
+
+        const wrapper =
+            p2$('#scheduleWrapper');
+
+
+        const grid =
+            p2$('#scheduleGrid');
+
+
+        if (!wrapper || !grid) {
+            return;
+        }
+
+
+        const toolbar =
+            document.createElement(
+                'div'
+            );
+
+
+        toolbar.id =
+            'phase2Toolbar';
+
+
+        toolbar.className =
+            'phase2-toolbar';
+
+
+        toolbar.innerHTML = `
+
+            <div
+                class="phase2-toolbar-info"
+            >
+
+                <strong>
+                    Gestion flexible du temps
+                </strong>
+
+                <span>
+                    Modifiez une heure à gauche
+                    ou cliquez sur une case.
+                </span>
+
+            </div>
+
+
+            <div
+                class="phase2-toolbar-actions"
+            >
+
+                <button
+                    type="button"
+                    class="btn btn-soft"
+                    id="p2AddBreak"
+                >
+                    ＋ Ajouter une pause
+                </button>
+
+
+                <button
+                    type="button"
+                    class="btn btn-soft"
+                    id="p2ResetTimes"
+                >
+                    ↺ Réinitialiser les heures
+                </button>
+
+            </div>
+
+        `;
+
+
+        wrapper.parentNode.insertBefore(
+            toolbar,
+            wrapper
+        );
+
+
+        p2$('#p2AddBreak')
+            ?.addEventListener(
+                'click',
+                p2CreateBreak
+            );
+
+
+        p2$('#p2ResetTimes')
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    p2EnsureModel();
+
+
+                    const defaultHours = [
+                        '08:30',
+                        '09:25',
+                        '10:20',
+                        '11:15',
+                        '12:10',
+                        '13:05',
+                        '14:00',
+                        '14:55',
+                        '15:40',
+                        '16:35'
+                    ];
+
+
+                    state.schedule.rows
+                        .forEach(
+                            (
+                                row,
+                                index
+                            ) => {
+
+                                const time =
+                                    defaultHours[
+                                    index
+                                    ] || '';
+
+
+                                row.defaultTime =
+                                    time;
+
+
+                                for (
+                                    let day = 1;
+                                    day <= Number(
+                                        state.days || 0
+                                    );
+                                    day++
+                                ) {
+
+                                    const cell =
+                                        p2GetCell(
+                                            row.id,
+                                            day
+                                        );
+
+
+                                    cell.time =
+                                        time;
+
+                                }
+
+                            }
+                        );
+
+
+                    p2Persist();
+
+                    p2RenderGrid();
+
+                }
+            );
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Synchronisation avec les contrôles existants
+     * ----------------------------------------------------------
+     */
+
+    function p2InstallControlHooks() {
+
+        /*
+         * Quand le nombre de périodes AM/PM
+         * change, la grille existante est reconstruite.
+         *
+         * On attend donc un peu puis on réinstalle
+         * notre rendu.
+         */
+
+        [
+            '#amCount',
+            '#pmCount',
+            '#lunchToggle',
+            '#hoursToggle',
+            '#dayCount'
+        ].forEach(
+            selector => {
+
+                p2$(selector)
+                    ?.addEventListener(
+                        'change',
+                        () => {
+
+                            setTimeout(
+                                () => {
+
+                                    p2EnsureModel();
+
+                                    p2RenderGrid();
+
+                                },
+                                30
+                            );
+
+                        }
+                    );
+
+            }
+        );
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Activation
+     * ----------------------------------------------------------
+     */
+
+    function p2Activate() {
+
+        if (phase2Ready) {
+            return;
+        }
+
+
+        if (
+            !p2$('#scheduleGrid')
+        ) {
+            return;
+        }
+
+
+        if (
+            !p2EnsureModel()
+        ) {
+            return;
+        }
+
+
+        /*
+         * Il faut attendre que Supabase ait terminé
+         * son chargement initial.
+         *
+         * On considère la grille prête si elle
+         * possède des lignes v2.
+         */
+        if (
+            !Array.isArray(
+                state.schedule.rows
+            )
+        ) {
+            return;
+        }
+
+
+        phase2Ready =
+            true;
+
+
+        p2InstallToolbar();
+
+        p2InstallDialog();
+
+        p2InstallControlHooks();
+
+        p2RenderGrid();
+
+
+        console.info(
+            'PlanifProf Phase 2 activée.'
+        );
+
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Attente du chargement initial
+     * ----------------------------------------------------------
+     *
+     * initializePlanifProf() est asynchrone.
+     *
+     * Nous attendons donc que la grille ait été
+     * construite avant d'activer Phase 2.
+     */
+
+    let attempts = 0;
+
+
+    const waitTimer =
+        setInterval(
+            () => {
+
+                attempts++;
+
+
+                try {
+
+                    if (
+                        p2$('#scheduleGrid') &&
+                        typeof state !==
+                        'undefined'
+                    ) {
+
+                        p2Activate();
+
+                    }
+
+
+                } catch (error) {
+
+                    console.warn(
+                        'PlanifProf Phase 2 :',
+                        error
+                    );
+
+                }
+
+
+                if (
+                    phase2Ready ||
+                    attempts >= 100
+                ) {
+
+                    clearInterval(
+                        waitTimer
+                    );
+
+                }
+
+            },
+            100
+        );
+
+
+    /*
+     * ----------------------------------------------------------
+     * Exposer une fonction de test
+     * ----------------------------------------------------------
+     */
+
+    window.PlanifProfPhase2 = {
+
+        activate:
+            p2Activate,
+
+        render:
+            p2RenderGrid,
+
+        addBreak:
+            p2CreateBreak
+
+    };
+
+
+})();
