@@ -5298,88 +5298,6 @@ CORRECTION GRILLE COMPACTE
 
 
     /* ---------------------------------------------------------
-       BARRE DE CONTRÔLES PHASE 2
-       --------------------------------------------------------- */
-
-    function installPhase2Toolbar() {
-
-        if (
-            document.querySelector('#phase2Tools')
-        ) {
-
-            return;
-
-        }
-
-
-        const builderTools =
-            document.querySelector('.builder-tools');
-
-
-        if (!builderTools) return;
-
-
-        const toolbar =
-            document.createElement('div');
-
-
-        toolbar.id =
-            'phase2Tools';
-
-
-        toolbar.innerHTML = `
-
-            <div class="phase2-info">
-
-                <strong>
-                    Gestion flexible du temps
-                </strong>
-
-                <span>
-                    Modifiez une heure à gauche ou cliquez sur une case.
-                </span>
-
-            </div>
-
-            <div class="phase2-actions">
-
-                <button
-                    id="addBreak"
-                    type="button"
-                    class="phase2-btn primary"
-                >
-                    + Ajouter une pause
-                </button>
-
-                <button
-                    id="removeBreak"
-                    type="button"
-                    class="phase2-btn danger"
-                >
-                    Supprimer une pause
-                </button>
-
-                <button
-                    id="resetRowTimes"
-                    type="button"
-                    class="phase2-btn"
-                >
-                    ↺ Réinitialiser les heures
-                </button>
-
-            </div>
-
-        `;
-
-
-        builderTools.after(
-            toolbar
-        );
-
-    }
-
-
-    /* ---------------------------------------------------------
        BIND DES BOUTONS
        --------------------------------------------------------- */
 
@@ -5460,8 +5378,6 @@ CORRECTION GRILLE COMPACTE
         ensureScheduleModel();
 
         normalizePhase2Rows();
-
-        installPhase2Toolbar();
 
         bindPhase2Controls();
 
