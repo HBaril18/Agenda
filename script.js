@@ -4248,3 +4248,1280 @@ function bindAdvancedGroupTools(){
 
 
 })();
+
+/* ============================================================
+PLANIFPROF — PHASE 2
+CORRECTION GRILLE COMPACTE
+============================================================ */
+
+(function installPlanifProfPhase2() {
+
+    /* ---------------------------------------------------------
+       Utilitaires
+       --------------------------------------------------------- */
+
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+
+    const isBreakRow = (row) => {
+
+        if (!row) return false;
+
+        return [
+            'break',
+            'recreation',
+            'pause'
+        ].includes(row.type);
+
+    };
+
+
+    const getScheduleRows = () => {
+
+        ensureScheduleModel();
+
+        return Array.isArray(state.schedule.rows)
+            ? state.schedule.rows
+            : [];
+
+    };
+
+
+    const getScheduleCells = () => {
+
+        ensureScheduleModel();
+
+        state.schedule.cells =
+            state.schedule.cells || {};
+
+        state.data =
+            state.schedule.cells;
+
+        return state.schedule.cells;
+
+    };
+
+
+    /* ---------------------------------------------------------
+       S'assure que les propriétés Phase 2 existent
+       --------------------------------------------------------- */
+
+    function normalizePhase2Rows() {
+
+        ensureScheduleModel();
+
+        const rows =
+            Array.isArray(state.schedule.rows)
+                ? state.schedule.rows
+                : [];
+
+        rows.forEach((row, index) => {
+
+            if (!row.id) {
+                row.id =
+                    `${row.type || 'row'}_${Date.now()}_${index}`;
+            }
+
+            if (!row.type) {
+                row.type = 'course';
+            }
+
+            if (!row.label) {
+
+                row.label =
+                    row.type === 'lunch'
+                        ? 'Dîner'
+                        : row.type === 'break'
+                            ? `Récréation ${index + 1}`
+                            : `Cours ${index + 1}`;
+
+            }
+
+            if (!row.defaultTime) {
+
+                row.defaultTime =
+                    hourFor(index);
+
+            }
+
+            if (!row.height) {
+
+                row.height =
+                    isBreakRow(row) || row.type === 'lunch'
+                        ? 62
+                        : 96;
+
+            }
+
+        });
+
+        state.schedule.rows = rows;
+
+        state.schedule.cells =
+            state.schedule.cells || {};
+
+        state.data =
+            state.schedule.cells;
+
+    }
+
+
+    /* ---------------------------------------------------------
+       RECONSTRUIT LES LIGNES
+       MAIS CONSERVE LES PAUSES PERSONNALISÉES
+       --------------------------------------------------------- */
+
+    const originalRebuildScheduleRows =
+        typeof rebuildScheduleRows === 'function'
+            ? rebuildScheduleRows
+            : null;
+
+
+    rebuildScheduleRows = function phase2RebuildScheduleRows() {
+
+        ensureScheduleModel();
+
+        const currentRows =
+            Array.isArray(state.schedule.rows)
+                ? state.schedule.rows
+                : [];
+
+
+        /*
+         * On conserve toutes les pauses créées
+         * manuellement.
+         */
+        const customBreaks =
+            currentRows
+                .filter(isBreakRow)
+                .map(row => ({
+                    ...row
+                }));
+
+
+        /*
+         * On reconstruit les lignes normales
+         * à partir des contrôles AM / PM / dîner.
+         */
+        const baseRows =
+            createLegacyRows(state);
+
+
+        /*
+         * On insère les pauses après le dîner.
+         * Si le dîner est désactivé, elles sont placées
+         * après les périodes AM.
+         */
+        let insertIndex =
+            baseRows.findIndex(
+                row =>
+                    row.type === 'course' &&
+                    row.id.startsWith('pm')
+            );
+
+
+        if (insertIndex < 0) {
+            insertIndex = baseRows.length;
+        }
+
+
+        /*
+         * Si aucun dîner n'existe, les pauses sont placées
+         * après les cours AM.
+         */
+        if (!state.lunch) {
+
+            insertIndex =
+                baseRows.filter(
+                    row => row.type === 'course'
+                ).length;
+
+        }
+
+
+        baseRows.splice(
+            insertIndex,
+            0,
+            ...customBreaks
+        );
+
+
+        state.schedule.rows =
+            baseRows;
+
+        state.schedule.cells =
+            state.schedule.cells || {};
+
+        state.data =
+            state.schedule.cells;
+
+
+        normalizePhase2Rows();
+
+    };
+
+
+    /* ---------------------------------------------------------
+       AJOUTER UNE PAUSE
+       --------------------------------------------------------- */
+
+    function addPhase2Break() {
+
+        ensureScheduleModel();
+
+        normalizePhase2Rows();
+
+        const rows =
+            state.schedule.rows;
+
+        const existingBreaks =
+            rows.filter(isBreakRow);
+
+
+        const nextNumber =
+            existingBreaks.length + 1;
+
+
+        const breakId =
+            `break_${Date.now().toString(36)}_${Math.random()
+                .toString(36)
+                .slice(2, 7)}`;
+
+
+        /*
+         * Heure proposée :
+         * on prend l'heure de la ligne précédente
+         * puis on ajoute 5 minutes lorsque possible.
+         */
+        const referenceRow =
+            rows
+                .slice()
+                .reverse()
+                .find(
+                    row =>
+                        row.type === 'course' ||
+                        row.type === 'lunch'
+                );
+
+
+        const referenceTime =
+            referenceRow?.defaultTime ||
+            '12:10';
+
+
+        const newBreak = {
+
+            id: breakId,
+
+            type: 'break',
+
+            label:
+                `Récréation ${nextNumber}`,
+
+            defaultTime:
+                referenceTime,
+
+            height:
+                62
+
+        };
+
+
+        /*
+         * Placement après le dîner.
+         */
+        let insertIndex =
+            rows.findIndex(
+                row =>
+                    row.type === 'course' &&
+                    row.id.startsWith('pm')
+            );
+
+
+        if (insertIndex < 0) {
+
+            insertIndex =
+                rows.length;
+
+        }
+
+
+        rows.splice(
+            insertIndex,
+            0,
+            newBreak
+        );
+
+
+        /*
+         * Créer des cases vides pour chaque journée.
+         */
+        getScheduleCells();
+
+        for (
+            let day = 1;
+            day <= state.days;
+            day++
+        ) {
+
+            state.schedule.cells[
+                `${breakId}-${day}`
+            ] = normalizeCell({
+
+                courseId: '',
+                groupId: '',
+                room: '',
+                time: referenceTime,
+                note: '',
+
+                text: {
+                    color: '',
+                    align: 'center',
+                    vertical: 'center',
+                    wrap: true,
+                    showGenericLabel: false
+                },
+
+                groupColorMode: 'dot',
+
+                size: {
+                    width: null,
+                    height: 62
+                }
+
+            });
+
+        }
+
+
+        state.data =
+            state.schedule.cells;
+
+
+        persist();
+
+        renderGrid();
+
+    }
+
+
+    /* ---------------------------------------------------------
+       SUPPRIMER UNE PAUSE
+       --------------------------------------------------------- */
+
+    function deletePhase2Break(rowId) {
+
+        ensureScheduleModel();
+
+        const rows =
+            state.schedule.rows || [];
+
+
+        const row =
+            rows.find(
+                item =>
+                    item.id === rowId &&
+                    isBreakRow(item)
+            );
+
+
+        if (!row) return;
+
+
+        /*
+         * Supprimer les cases de la pause.
+         */
+        for (
+            let day = 1;
+            day <= state.days;
+            day++
+        ) {
+
+            delete state.schedule.cells[
+                `${row.id}-${day}`
+            ];
+
+        }
+
+
+        /*
+         * Supprimer la ligne.
+         */
+        state.schedule.rows =
+            rows.filter(
+                item =>
+                    item.id !== row.id
+            );
+
+
+        state.data =
+            state.schedule.cells;
+
+
+        persist();
+
+        renderGrid();
+
+    }
+
+
+    /* ---------------------------------------------------------
+       SUPPRIMER LA DERNIÈRE PAUSE
+       --------------------------------------------------------- */
+
+    function deleteLastPhase2Break() {
+
+        const rows =
+            getScheduleRows();
+
+
+        const breaks =
+            rows.filter(isBreakRow);
+
+
+        if (!breaks.length) {
+
+            return;
+
+        }
+
+
+        const lastBreak =
+            breaks[breaks.length - 1];
+
+
+        deletePhase2Break(
+            lastBreak.id
+        );
+
+    }
+
+
+    /* ---------------------------------------------------------
+       MODIFIER L'HEURE D'UNE LIGNE
+       --------------------------------------------------------- */
+
+    function updatePhase2RowTime(
+        rowId,
+        newTime
+    ) {
+
+        if (!newTime) return;
+
+
+        const rows =
+            getScheduleRows();
+
+
+        const row =
+            rows.find(
+                item =>
+                    item.id === rowId
+            );
+
+
+        if (!row) return;
+
+
+        /*
+         * L'heure de la ligne devient la nouvelle
+         * valeur par défaut.
+         */
+        row.defaultTime =
+            newTime;
+
+
+        /*
+         * On applique volontairement l'heure à
+         * TOUTES les journées de cette ligne.
+         */
+        const cells =
+            getScheduleCells();
+
+
+        for (
+            let day = 1;
+            day <= state.days;
+            day++
+        ) {
+
+            const cellKey =
+                `${rowId}-${day}`;
+
+
+            cells[cellKey] =
+                normalizeCell(
+                    cells[cellKey] || {}
+                );
+
+
+            cells[cellKey].time =
+                newTime;
+
+        }
+
+
+        state.data =
+            state.schedule.cells;
+
+
+        persist();
+
+    }
+
+
+    /* ---------------------------------------------------------
+       RÉINITIALISER LES HEURES
+       --------------------------------------------------------- */
+
+    function resetPhase2Times() {
+
+        const rows =
+            getScheduleRows();
+
+
+        const cells =
+            getScheduleCells();
+
+
+        rows.forEach(
+            (row, index) => {
+
+                const defaultTime =
+                    hourFor(index);
+
+
+                row.defaultTime =
+                    defaultTime;
+
+
+                for (
+                    let day = 1;
+                    day <= state.days;
+                    day++
+                ) {
+
+                    const cellKey =
+                        `${row.id}-${day}`;
+
+
+                    cells[cellKey] =
+                        normalizeCell(
+                            cells[cellKey] || {}
+                        );
+
+
+                    cells[cellKey].time =
+                        defaultTime;
+
+                }
+
+            }
+        );
+
+
+        state.data =
+            state.schedule.cells;
+
+
+        persist();
+
+        renderGrid();
+
+    }
+
+
+    /* ---------------------------------------------------------
+       RENDU DE LA GRILLE
+       --------------------------------------------------------- */
+
+    renderGrid = function phase2RenderGrid() {
+
+        const grid =
+            $('#scheduleGrid');
+
+
+        if (!grid) return;
+
+
+        ensureScheduleModel();
+
+        normalizePhase2Rows();
+
+
+        grid.style.setProperty(
+            '--days',
+            state.days
+        );
+
+
+        /*
+         * EN-TÊTE
+         */
+        let html =
+
+            `<div class="schedule-corner">
+                HEURE
+             </div>`;
+
+
+        for (
+            let day = 1;
+            day <= state.days;
+            day++
+        ) {
+
+            html +=
+                `<div class="day-title">
+                    Jour ${day}
+                 </div>`;
+
+        }
+
+
+        const rows =
+            getScheduleRows();
+
+
+        const cells =
+            getScheduleCells();
+
+
+        rows.forEach(
+            (row, rowIndex) => {
+
+                const rowHeight =
+                    isBreakRow(row) ||
+                        row.type === 'lunch'
+                        ? 62
+                        : 96;
+
+
+                row.height =
+                    rowHeight;
+
+
+                /*
+                 * ------------------------------------------------
+                 * COLONNE HEURE
+                 * ------------------------------------------------
+                 */
+
+                html +=
+                    `<div
+                        class="p2-time-cell"
+                        style="--row-height:${rowHeight}px"
+                    >
+
+                        <input
+                            class="p2-time-input"
+                            type="time"
+                            value="${escapeHtml(
+                        row.defaultTime ||
+                        hourFor(rowIndex)
+                    )}"
+                            data-row-time="${escapeHtml(row.id)}"
+                            aria-label="Heure de ${escapeHtml(row.label)}"
+                        >
+
+                        <span class="p2-row-label">
+                            ${escapeHtml(row.label)}
+                        </span>
+
+                        ${isBreakRow(row)
+                        ? `
+                                    <button
+                                        type="button"
+                                        class="p2-delete-row"
+                                        data-delete-break="${escapeHtml(row.id)}"
+                                        title="Supprimer cette pause"
+                                        aria-label="Supprimer ${escapeHtml(row.label)}"
+                                    >
+                                        ×
+                                    </button>
+                                  `
+                        : ''
+                    }
+
+                    </div>`;
+
+
+                /*
+                 * ------------------------------------------------
+                 * CASES DES JOURS
+                 * ------------------------------------------------
+                 */
+
+                for (
+                    let day = 1;
+                    day <= state.days;
+                    day++
+                ) {
+
+                    const cellKey =
+                        `${row.id}-${day}`;
+
+
+                    const item =
+                        normalizeCell(
+                            cells[cellKey] || {}
+                        );
+
+
+                    cells[cellKey] =
+                        item;
+
+
+                    const course =
+                        getCourse(
+                            item.courseId
+                        );
+
+
+                    const group =
+                        getGroup(
+                            item.groupId
+                        );
+
+
+                    /*
+                     * PAUSE
+                     */
+                    if (
+                        isBreakRow(row)
+                    ) {
+
+                        html +=
+                            `<div
+                                class="cell p2-break-cell"
+                                style="--row-height:${rowHeight}px"
+                                aria-label="${escapeHtml(row.label)}"
+                            >
+
+                                <div class="p2-break-content">
+
+                                    <span class="p2-break-label">
+                                        ☕
+                                        ${escapeHtml(row.label)}
+                                    </span>
+
+                                </div>
+
+                            </div>`;
+
+                        continue;
+
+                    }
+
+
+                    /*
+                     * DÎNER
+                     */
+                    if (
+                        row.type === 'lunch'
+                    ) {
+
+                        const lunchIcons = [
+                            '🍎',
+                            '🍉',
+                            '🥪',
+                            '🍓',
+                            '🥗',
+                            '🍊',
+                            '🍒',
+                            '🥝',
+                            '🍐'
+                        ];
+
+
+                        html +=
+                            `<div
+                                class="cell lunch-cell"
+                                style="--row-height:${rowHeight}px"
+                                aria-label="${escapeHtml(row.label || 'Dîner')}"
+                            >
+
+                                <div class="cell-content">
+
+                                    <span class="group-text">
+                                        ${escapeHtml(
+                                row.label || 'Dîner'
+                            )}
+                                    </span>
+
+                                </div>
+
+                                <span class="lunch-icon">
+                                    ${lunchIcons[(day - 1) % lunchIcons.length]}
+                                </span>
+
+                            </div>`;
+
+                        continue;
+
+                    }
+
+
+                    /*
+                     * ------------------------------------------------
+                     * CASE NORMALE
+                     * ------------------------------------------------
+                     */
+
+                    let cellClasses =
+                        'cell';
+
+
+                    /*
+                     * Couleur du groupe
+                     */
+                    if (
+                        group &&
+                        item.groupColorMode === 'border'
+                    ) {
+
+                        cellClasses +=
+                            ' p2-group-border';
+
+                    }
+
+
+                    if (
+                        group &&
+                        item.groupColorMode === 'background'
+                    ) {
+
+                        cellClasses +=
+                            ' p2-group-background';
+
+                    }
+
+
+                    const groupStyle =
+                        group
+                            ? `--group-color:${escapeHtml(group.color || '#70c85d')};`
+                            : '';
+
+
+                    const courseStyle =
+                        course
+                            ? `--course-color:${escapeHtml(course.color || '#70c85d')};`
+                            : '';
+
+
+                    const textColor =
+                        item.text?.color
+                            ? `color:${escapeHtml(item.text.color)};`
+                            : '';
+
+
+                    const courseHtml =
+                        course
+                            ? `
+                                <span
+                                    class="course-pill"
+                                    style="${courseStyle}"
+                                >
+                                    ${escapeHtml(course.name)}
+                                </span>
+                              `
+                            : '';
+
+
+                    const groupHtml =
+                        group
+                            ? `
+                                <span
+                                    class="group-text"
+                                    style="${textColor}"
+                                >
+                                    ${escapeHtml(group.name)}
+                                </span>
+                              `
+                            : '';
+
+
+                    const roomHtml =
+                        item.room
+                            ? `
+                                <span class="room-text">
+                                    ${escapeHtml(item.room)}
+                                </span>
+                              `
+                            : '';
+
+
+                    const noteHtml =
+                        item.note
+                            ? `
+                                <span class="note-text">
+                                    ${escapeHtml(item.note)}
+                                </span>
+                              `
+                            : '';
+
+
+                    html +=
+                        `<button
+                            type="button"
+                            class="${cellClasses}"
+                            data-cell="${escapeHtml(cellKey)}"
+                            style="
+                                --row-height:${rowHeight}px;
+                                ${groupStyle}
+                            "
+                        >
+
+                            <div
+                                class="cell-content"
+                                style="
+                                    ${textColor}
+                                    text-align:${escapeHtml(
+                            item.text?.align || 'left'
+                        )};
+                                "
+                            >
+
+                                ${courseHtml}
+
+                                ${groupHtml}
+
+                                ${roomHtml}
+
+                                ${noteHtml}
+
+                            </div>
+
+                        </button>`;
+
+                }
+
+            }
+        );
+
+
+        grid.innerHTML =
+            html;
+
+
+        /*
+         * --------------------------------------------------------
+         * HEURES DE LIGNES
+         * --------------------------------------------------------
+         */
+
+        grid
+            .querySelectorAll('[data-row-time]')
+            .forEach(
+                input => {
+
+                    input.addEventListener(
+                        'change',
+                        event => {
+
+                            updatePhase2RowTime(
+                                event.target.dataset.rowTime,
+                                event.target.value
+                            );
+
+                            renderGrid();
+
+                        }
+                    );
+
+                }
+            );
+
+
+        /*
+         * --------------------------------------------------------
+         * SUPPRESSION DES PAUSES
+         * --------------------------------------------------------
+         */
+
+        grid
+            .querySelectorAll('[data-delete-break]')
+            .forEach(
+                button => {
+
+                    button.addEventListener(
+                        'click',
+                        event => {
+
+                            event.preventDefault();
+
+                            event.stopPropagation();
+
+                            deletePhase2Break(
+                                button.dataset.deleteBreak
+                            );
+
+                        }
+                    );
+
+                }
+            );
+
+
+        /*
+         * --------------------------------------------------------
+         * OUVERTURE DES CASES
+         * --------------------------------------------------------
+         */
+
+        grid
+            .querySelectorAll('[data-cell]')
+            .forEach(
+                cell => {
+
+                    cell.addEventListener(
+                        'click',
+                        () => {
+
+                            openCellDialog(
+                                cell.dataset.cell,
+                                false
+                            );
+
+                        }
+                    );
+
+                }
+            );
+
+    };
+
+
+    /* ---------------------------------------------------------
+       BARRE DE CONTRÔLES PHASE 2
+       --------------------------------------------------------- */
+
+    function installPhase2Toolbar() {
+
+        if (
+            document.querySelector('#phase2Tools')
+        ) {
+
+            return;
+
+        }
+
+
+        const builderTools =
+            document.querySelector('.builder-tools');
+
+
+        if (!builderTools) return;
+
+
+        const toolbar =
+            document.createElement('div');
+
+
+        toolbar.id =
+            'phase2Tools';
+
+
+        toolbar.innerHTML = `
+
+            <div class="phase2-info">
+
+                <strong>
+                    Gestion flexible du temps
+                </strong>
+
+                <span>
+                    Modifiez une heure à gauche ou cliquez sur une case.
+                </span>
+
+            </div>
+
+            <div class="phase2-actions">
+
+                <button
+                    id="addBreak"
+                    type="button"
+                    class="phase2-btn primary"
+                >
+                    + Ajouter une pause
+                </button>
+
+                <button
+                    id="removeBreak"
+                    type="button"
+                    class="phase2-btn danger"
+                >
+                    Supprimer une pause
+                </button>
+
+                <button
+                    id="resetRowTimes"
+                    type="button"
+                    class="phase2-btn"
+                >
+                    ↺ Réinitialiser les heures
+                </button>
+
+            </div>
+
+        `;
+
+
+        builderTools.after(
+            toolbar
+        );
+
+    }
+
+
+    /* ---------------------------------------------------------
+       BIND DES BOUTONS
+       --------------------------------------------------------- */
+
+    function bindPhase2Controls() {
+
+        const addBreak =
+            $('#addBreak');
+
+
+        const removeBreak =
+            $('#removeBreak');
+
+
+        const resetTimes =
+            $('#resetRowTimes');
+
+
+        if (addBreak &&
+            !addBreak.dataset.phase2Bound) {
+
+            addBreak.dataset.phase2Bound =
+                'true';
+
+
+            addBreak.addEventListener(
+                'click',
+                addPhase2Break
+            );
+
+        }
+
+
+        if (removeBreak &&
+            !removeBreak.dataset.phase2Bound) {
+
+            removeBreak.dataset.phase2Bound =
+                'true';
+
+
+            removeBreak.addEventListener(
+                'click',
+                deleteLastPhase2Break
+            );
+
+        }
+
+
+        if (resetTimes &&
+            !resetTimes.dataset.phase2Bound) {
+
+            resetTimes.dataset.phase2Bound =
+                'true';
+
+
+            resetTimes.addEventListener(
+                'click',
+                resetPhase2Times
+            );
+
+        }
+
+    }
+
+
+    /* ---------------------------------------------------------
+       INITIALISATION
+       --------------------------------------------------------- */
+
+    function bootPhase2() {
+
+        const grid =
+            $('#scheduleGrid');
+
+
+        if (!grid) return;
+
+
+        ensureScheduleModel();
+
+        normalizePhase2Rows();
+
+        installPhase2Toolbar();
+
+        bindPhase2Controls();
+
+        /*
+         * Premier rendu.
+         */
+        renderGrid();
+
+    }
+
+
+    /*
+     * Le chargement Supabase est asynchrone.
+     * On attend donc que le state soit disponible.
+     */
+    let attempts = 0;
+
+
+    const phase2Timer =
+        setInterval(
+            () => {
+
+                attempts++;
+
+
+                if (
+                    $('#scheduleGrid') &&
+                    typeof state !== 'undefined' &&
+                    state.schedule &&
+                    Array.isArray(
+                        state.schedule.rows
+                    )
+                ) {
+
+                    clearInterval(
+                        phase2Timer
+                    );
+
+                    bootPhase2();
+
+                }
+
+
+                /*
+                 * Sécurité : ne jamais laisser le timer
+                 * tourner indéfiniment.
+                 */
+                if (
+                    attempts > 200
+                ) {
+
+                    clearInterval(
+                        phase2Timer
+                    );
+
+                }
+
+            },
+            50
+        );
+
+
+})();

@@ -2005,3 +2005,517 @@ body[data-page="groups"] .page-title h1 {
         font-size: 6pt !important;
     }
 }
+
+/* ============================================================
+   PLANIFPROF — PHASE 2
+   GRILLE COMPACTE + COLONNE HEURE + PAUSES SUPPRIMABLES
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   CONTENEUR
+   ------------------------------------------------------------ */
+
+#scheduleWrapper {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 8px 4px 16px;
+    border-radius: 18px;
+}
+
+/* ------------------------------------------------------------
+   GRILLE COMPACTE
+   ------------------------------------------------------------ */
+
+#scheduleGrid {
+    display: grid;
+    /*
+     * 92px = colonne HEURE
+     * puis une colonne compacte par journée.
+     */
+    grid-template-columns: 92px repeat(var(--days, 9), minmax(104px, 1fr));
+    gap: 5px;
+    min-width: 1025px;
+    align-items: stretch;
+}
+
+/* ------------------------------------------------------------
+   EN-TÊTE HEURE
+   ------------------------------------------------------------ */
+
+.schedule-corner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 6px;
+    border-radius: 9px;
+    background: #f1f4f8;
+    color: #667085;
+    font-size: .62rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------
+   JOURS
+   ------------------------------------------------------------ */
+
+#scheduleGrid .day-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 5px 7px;
+    border-radius: 9px;
+    background: #10065f;
+    color: #fff;
+    font-size: .78rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+/* ------------------------------------------------------------
+   COLONNE HEURE
+   ------------------------------------------------------------ */
+
+.p2-time-cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: var(--row-height, 96px);
+    padding: 6px 4px;
+    background: #f8fafc;
+    border: 1px solid #e4e9f0;
+    border-radius: 9px;
+    box-shadow: 0 1px 3px rgba(20, 30, 50, .04);
+}
+
+/* Heure */
+
+.p2-time-input {
+    width: 72px;
+    height: 30px;
+    padding: 2px 4px;
+    border: 1px solid #d4dbe5;
+    border-radius: 7px;
+    background: #fff;
+    color: #182230;
+    font: inherit;
+    font-size: .73rem;
+    font-weight: 900;
+    text-align: center;
+}
+
+    .p2-time-input:focus {
+        outline: none;
+        border-color: #70c85d;
+        box-shadow: 0 0 0 3px rgba(112, 200, 93, .14);
+    }
+
+/* Nom de la ligne */
+
+.p2-row-label {
+    max-width: 82px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #667085;
+    font-size: .61rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+/* Petit bouton supprimer pause */
+
+.p2-delete-row {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: #fee2e2;
+    color: #b42318;
+    font-size: .7rem;
+    font-weight: 900;
+    cursor: pointer;
+    opacity: .9;
+}
+
+    .p2-delete-row:hover {
+        background: #fecaca;
+        transform: scale(1.05);
+    }
+
+/* ------------------------------------------------------------
+   CASES
+   ------------------------------------------------------------ */
+
+#scheduleGrid .cell {
+    position: relative;
+    min-width: 0;
+    height: var(--row-height, 96px);
+    min-height: var(--row-height, 96px);
+    padding: 8px;
+    border-radius: 9px;
+    background: #fff;
+    border: 1px solid #e1e6ed;
+    box-shadow: 0 1px 3px rgba(20, 30, 50, .035);
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+
+    #scheduleGrid .cell:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(20, 30, 50, .08);
+    }
+
+/* ------------------------------------------------------------
+   ON SUPPRIME COMPLÈTEMENT LES ANCIENS "+"
+   ------------------------------------------------------------ */
+
+#scheduleGrid .row-add,
+.row-add {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* ------------------------------------------------------------
+   ANCIEN LABEL "COURS 1", "COURS 2", ETC.
+   ------------------------------------------------------------ */
+
+#scheduleGrid .placeholder {
+    display: none !important;
+}
+
+/* ------------------------------------------------------------
+   CONTENU DES COURS
+   ------------------------------------------------------------ */
+
+#scheduleGrid .cell-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* ------------------------------------------------------------
+   NOM DU COURS
+   ------------------------------------------------------------ */
+
+#scheduleGrid .course-pill {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    padding: 3px 6px;
+    border-radius: 5px;
+    color: #243044 !important;
+    background: transparent !important;
+    border-left: 3px solid var(--course-color, #70c85d);
+    font-size: .71rem;
+    font-weight: 900;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------
+   GROUPE
+   ------------------------------------------------------------ */
+
+#scheduleGrid .group-text {
+    display: block;
+    width: 100%;
+    color: #475467;
+    font-size: .67rem;
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------
+   LOCAL
+   ------------------------------------------------------------ */
+
+#scheduleGrid .room-text {
+    color: #667085;
+    font-size: .62rem;
+    line-height: 1.15;
+}
+
+/* ------------------------------------------------------------
+   NOTE
+   ------------------------------------------------------------ */
+
+#scheduleGrid .note-text {
+    color: #7a8494;
+    font-size: .61rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------
+   PLUS D'HEURE À L'INTÉRIEUR DES CASES
+   ------------------------------------------------------------ */
+
+#scheduleGrid .time-label {
+    display: none !important;
+}
+
+/* ------------------------------------------------------------
+   COULEUR DU GROUPE
+   ------------------------------------------------------------ */
+
+#scheduleGrid .p2-group-border {
+    border-left: 4px solid var(--group-color, #70c85d) !important;
+}
+
+#scheduleGrid .p2-group-background {
+    background: color-mix( in srgb, var(--group-color, #70c85d) 7%, #fff ) !important;
+}
+
+/* ------------------------------------------------------------
+   DÎNER
+   ------------------------------------------------------------ */
+
+#scheduleGrid .lunch-cell {
+    height: var(--row-height, 62px);
+    min-height: var(--row-height, 62px);
+    background: #e4f8ea !important;
+    border-color: #ccebd5 !important;
+}
+
+    #scheduleGrid .lunch-cell .cell-content {
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
+    #scheduleGrid .lunch-cell .group-text {
+        color: #285b3a;
+        font-size: .72rem;
+        font-weight: 900;
+    }
+
+#scheduleGrid .lunch-icon {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    font-size: .8rem;
+}
+
+/* ------------------------------------------------------------
+   PAUSES / RÉCRÉATIONS
+   ------------------------------------------------------------ */
+
+#scheduleGrid .p2-break-cell {
+    height: var(--row-height, 62px);
+    min-height: var(--row-height, 62px);
+    background: #fff9e7 !important;
+    border-color: #f0dfaa !important;
+}
+
+#scheduleGrid .p2-break-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+}
+
+#scheduleGrid .p2-break-label {
+    color: #705d2a;
+    font-size: .72rem;
+    font-weight: 900;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------
+   BARRE PHASE 2
+   ------------------------------------------------------------ */
+
+#phase2Tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid #e1e7ef;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+    #phase2Tools .phase2-info {
+        min-width: 0;
+    }
+
+        #phase2Tools .phase2-info strong {
+            display: block;
+            color: #253044;
+            font-size: .86rem;
+        }
+
+        #phase2Tools .phase2-info span {
+            display: block;
+            margin-top: 2px;
+            color: #7a8494;
+            font-size: .69rem;
+        }
+
+    #phase2Tools .phase2-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+    }
+
+.phase2-btn {
+    border: 1px solid #d7dee8;
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: #fff;
+    color: #344054;
+    font: inherit;
+    font-size: .7rem;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+    .phase2-btn:hover {
+        border-color: #70c85d;
+    }
+
+    .phase2-btn.primary {
+        background: #70c85d;
+        border-color: #70c85d;
+        color: #fff;
+    }
+
+    .phase2-btn.danger {
+        color: #b42318;
+        border-color: #f2c5c5;
+        background: #fff7f7;
+    }
+
+/* ------------------------------------------------------------
+   MOBILE
+   ------------------------------------------------------------ */
+
+@media(max-width: 900px) {
+
+    #scheduleGrid {
+        grid-template-columns: 84px repeat(var(--days, 9), 104px);
+        min-width: max-content;
+    }
+
+    #phase2Tools {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+        #phase2Tools .phase2-actions {
+            width: 100%;
+        }
+}
+
+@media(max-width: 600px) {
+
+    #scheduleGrid {
+        grid-template-columns: 78px repeat(var(--days, 9), 100px);
+    }
+
+    .p2-time-input {
+        width: 64px;
+    }
+}
+
+/* ------------------------------------------------------------
+   IMPRESSION
+   ------------------------------------------------------------ */
+
+@media print {
+
+    #phase2Tools {
+        display: none !important;
+    }
+
+    #scheduleWrapper {
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+
+    #scheduleGrid {
+        width: 100% !important;
+        min-width: 0 !important;
+        grid-template-columns: 62px repeat(var(--days, 9), minmax(0, 1fr)) !important;
+        gap: 2px !important;
+    }
+
+        .schedule-corner,
+        #scheduleGrid .day-title {
+            min-height: 28px !important;
+            padding: 3px !important;
+            font-size: 6.5pt !important;
+        }
+
+    .p2-time-cell {
+        min-height: 58px !important;
+        padding: 2px !important;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .p2-time-input {
+        width: auto !important;
+        height: auto !important;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        font-size: 6.5pt !important;
+    }
+
+    .p2-row-label {
+        display: none !important;
+    }
+
+    #scheduleGrid .cell {
+        height: 58px !important;
+        min-height: 58px !important;
+        padding: 4px !important;
+        box-shadow: none !important;
+    }
+
+    #scheduleGrid .course-pill {
+        font-size: 6pt !important;
+    }
+
+    #scheduleGrid .group-text {
+        font-size: 5.8pt !important;
+    }
+
+    #scheduleGrid .room-text,
+    #scheduleGrid .note-text {
+        font-size: 5.3pt !important;
+    }
+}
