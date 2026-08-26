@@ -778,7 +778,6 @@ function bindMetaFields(){
 
 function populateDialogOptions() {
 
-    // Cours
     if ($('#cellCourse')) {
         $('#cellCourse').innerHTML =
             '<option value="">Aucun cours</option>' +
@@ -787,7 +786,6 @@ function populateDialogOptions() {
             ).join('');
     }
 
-    // Groupes
     if ($('#cellGroup')) {
         $('#cellGroup').innerHTML =
             '<option value="">Aucun groupe</option>' +
@@ -798,7 +796,6 @@ function populateDialogOptions() {
             ).join('');
     }
 
-    // Mode de couleur du groupe
     if ($('#cellGroupColorMode')) {
         $('#cellGroupColorMode').innerHTML = `
             <option value="dot">Pastille</option>
@@ -807,7 +804,6 @@ function populateDialogOptions() {
         `;
     }
 
-    // Alignement du texte
     if ($('#cellTextAlign')) {
         $('#cellTextAlign').innerHTML = `
             <option value="top-left">Haut gauche</option>
@@ -818,7 +814,6 @@ function populateDialogOptions() {
         `;
     }
 
-    // Type de case
     if ($('#cellType')) {
         $('#cellType').innerHTML = `
             <option value="course">Cours</option>
@@ -841,7 +836,7 @@ function renderGrid() {
      * En-tête des jours
      */
     grid.innerHTML =
-        `<div class="hours-col"></div>` +
+        `<div class="hours-col-wrapper"></div>` +
         Array.from({ length: state.days }, (_, i) =>
             `<div class="day-title">Jour ${i + 1}</div>`
         ).join('');
@@ -1022,7 +1017,6 @@ function renderGrid() {
      */
     $$('[data-cell]').forEach(cell => {
         cell.draggable = true;
-
         cell.addEventListener('dragstart', handleDragStart);
         cell.addEventListener('dragover', handleDragOver);
         cell.addEventListener('dragleave', handleDragLeave);
@@ -1033,6 +1027,7 @@ function renderGrid() {
             openCellDialog(cell.dataset.cell, cell.dataset.type === 'lunch');
         });
     });
+
 
     /*
      * Boutons d'ajout AM/PM
@@ -1049,49 +1044,30 @@ function renderGrid() {
         });
     });
 }
-/* ============================================================
- * DRAG & DROP V2 — Compatible modèle v2
- * ============================================================
- */
 
 let dragSourceKey = null;
 
-/*
- * Début du drag
- */
 function handleDragStart(e) {
     const cell = e.currentTarget;
     dragSourceKey = cell.dataset.cell;
-
     cell.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
 }
 
-/*
- * Survol d’une autre cellule
- */
 function handleDragOver(e) {
     e.preventDefault();
     const cell = e.currentTarget;
-
     if (cell.dataset.cell !== dragSourceKey) {
         cell.classList.add('drop-target');
     }
 }
 
-/*
- * Quitte une cellule
- */
 function handleDragLeave(e) {
     e.currentTarget.classList.remove('drop-target');
 }
 
-/*
- * Drop final : échange des cases
- */
 function handleDrop(e) {
     e.preventDefault();
-
     const targetCell = e.currentTarget;
     const targetKey = targetCell.dataset.cell;
 
@@ -1099,31 +1075,23 @@ function handleDrop(e) {
 
     if (!dragSourceKey || dragSourceKey === targetKey) return;
 
-    // Lecture des deux cases
     const sourceData = state.schedule.cells[dragSourceKey] || null;
     const targetData = state.schedule.cells[targetKey] || null;
 
-    // Échange
     state.schedule.cells[dragSourceKey] = targetData;
     state.schedule.cells[targetKey] = sourceData;
 
-    // Alias compatibilité
     state.data = state.schedule.cells;
 
     persist();
     renderGrid();
 }
 
-/*
- * Fin du drag
- */
 function handleDragEnd(e) {
     e.currentTarget.classList.remove('dragging');
     dragSourceKey = null;
-
     $$('.drop-target').forEach(el => el.classList.remove('drop-target'));
 }
-
 function syncControls(){
   if($('#amCount')) $('#amCount').value = state.am;
   if($('#pmCount')) $('#pmCount').value = state.pm;
@@ -1483,46 +1451,44 @@ function bindBuilder() {
      * ==========================================================
      */
 
-$('#cellForm')?.addEventListener('submit', e => {
-    e.preventDefault();
+    $('#cellForm')?.addEventListener('submit', e => {
+        e.preventDefault();
 
-    const cellKey = $('#editingKey').value;
+        const cellKey = $('#editingKey').value;
 
-    const courseId = $('#cellCourse').value;
-    const groupId = $('#cellGroup').value;
-    const room = $('#cellRoom').value.trim();
-    const time = $('#cellTime').value;
-    const note = $('#cellNote').value.trim();
-    const type = $('#cellType').value;
-    const textAlign = $('#cellTextAlign').value;
-    const textColor = $('#cellTextColor').value;
-    const groupColorMode = $('#cellGroupColorMode').value;
+        const courseId = $('#cellCourse').value;
+        const groupId = $('#cellGroup').value;
+        const room = $('#cellRoom').value.trim();
+        const time = $('#cellTime').value;
+        const note = $('#cellNote').value.trim();
+        const type = $('#cellType').value;
+        const textAlign = $('#cellTextAlign').value;
+        const textColor = $('#cellTextColor').value;
+        const groupColorMode = $('#cellGroupColorMode').value;
 
-    const normalized = normalizeCell({
-        courseId,
-        groupId,
-        room,
-        time,
-        note,
-        type,
-        groupColorMode,
-        text: {
-            align: textAlign,
-            color: textColor,
-            wrap: true,
-            showGenericLabel: false
-        }
+        const normalized = normalizeCell({
+            courseId,
+            groupId,
+            room,
+            time,
+            note,
+            type,
+            groupColorMode,
+            text: {
+                align: textAlign,
+                color: textColor,
+                wrap: true,
+                showGenericLabel: false
+            }
+        });
+
+        state.schedule.cells[cellKey] = normalized;
+        state.data = state.schedule.cells;
+
+        persist();
+        $('#cellDialog').close();
+        renderGrid();
     });
-
-    state.schedule.cells[cellKey] = normalized;
-    state.data = state.schedule.cells;
-
-    persist();
-    $('#cellDialog').close();
-    renderGrid();
-});
-
-
 
     /*
      * ==========================================================
