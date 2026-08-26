@@ -776,328 +776,354 @@ function bindMetaFields(){
   });
 }
 
-function populateDialogOptions(){
-  if($('#cellCourse')) $('#cellCourse').innerHTML = '<option value="">Aucun cours</option>' + state.courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  if($('#cellGroup')) $('#cellGroup').innerHTML = '<option value="">Aucun groupe</option>' + state.groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+function populateDialogOptions() {
+
+    // Cours
+    if ($('#cellCourse')) {
+        $('#cellCourse').innerHTML =
+            '<option value="">Aucun cours</option>' +
+            state.courses.map(c =>
+                `<option value="${c.id}">${c.name}</option>`
+            ).join('');
+    }
+
+    // Groupes
+    if ($('#cellGroup')) {
+        $('#cellGroup').innerHTML =
+            '<option value="">Aucun groupe</option>' +
+            state.groups.map(g =>
+                `<option value="${g.id}" data-color="${g.color}">
+                    ${g.name}
+                </option>`
+            ).join('');
+    }
+
+    // Mode de couleur du groupe
+    if ($('#cellGroupColorMode')) {
+        $('#cellGroupColorMode').innerHTML = `
+            <option value="dot">Pastille</option>
+            <option value="border">Bordure</option>
+            <option value="background">Fond</option>
+        `;
+    }
+
+    // Alignement du texte
+    if ($('#cellTextAlign')) {
+        $('#cellTextAlign').innerHTML = `
+            <option value="top-left">Haut gauche</option>
+            <option value="top-right">Haut droite</option>
+            <option value="bottom-left">Bas gauche</option>
+            <option value="bottom-right">Bas droite</option>
+            <option value="center">Centre</option>
+        `;
+    }
+
+    // Type de case
+    if ($('#cellType')) {
+        $('#cellType').innerHTML = `
+            <option value="course">Cours</option>
+            <option value="lunch">Dîner</option>
+            <option value="recess">Récréation</option>
+            <option value="other">Autre</option>
+        `;
+    }
 }
 function renderGrid() {
 
-    const grid =
-        $('#scheduleGrid');
-
+    const grid = $('#scheduleGrid');
     if (!grid) return;
 
     ensureScheduleModel();
 
-    grid.style.setProperty(
-        '--days',
-        state.days
-    );
+    grid.style.setProperty('--days', state.days);
 
     /*
-     * En-tête des jours.
+     * En-tête des jours
      */
     grid.innerHTML =
-        `<div></div>` +
-        Array
-            .from(
-                { length: state.days },
-                (_, i) =>
-                    `<div class="day-title">
-             Jour ${i + 1}
-           </div>`
-            )
-            .join('');
-
-    const lunchIcons = [
-        '🧁',
-        '🍉',
-        '🍰',
-        '🍍',
-        '🥗',
-        '🍒',
-        '🥬',
-        '🍓',
-        '🍩',
-        '🍎'
-    ];
+        `<div class="hours-col"></div>` +
+        Array.from({ length: state.days }, (_, i) =>
+            `<div class="day-title">Jour ${i + 1}</div>`
+        ).join('');
 
     /*
-     * Parcours des lignes v2.
+     * Colonne des heures à gauche
      */
-    rows().forEach(
-        (row, rowIndex) => {
+    const hoursCol = document.createElement('div');
+    hoursCol.className = 'hours-col-wrapper';
+
+    rows().forEach((row, rowIndex) => {
+        const hourInput = document.createElement('input');
+        hourInput.type = 'time';
+        hourInput.className = 'row-hour-input';
+        hourInput.value = row.defaultTime || hourFor(rowIndex);
+
+        hourInput.addEventListener('change', () => {
+            row.defaultTime = hourInput.value;
+            persist();
+            renderGrid();
+        });
+
+        hoursCol.appendChild(hourInput);
+    });
+
+    grid.appendChild(hoursCol);
+
+    /*
+     * Icônes de dîner
+     */
+    const lunchIcons = ['🧁','🍉','🍰','🍍','🥗','🍒','🥬','🍓','🍩','🍎'];
+
+    /*
+     * Parcours des lignes v2
+     */
+    rows().forEach((row, rowIndex) => {
+
+        const addTarget =
+            row.type === 'course' && row.slot.startsWith('am') ? 'am' :
+            row.type === 'course' ? 'pm' : '';
+
+        grid.insertAdjacentHTML(
+            'beforeend',
+            addTarget
+                ? `<button class="row-add" data-add="${addTarget}" title="Ajouter un cours">+</button>`
+                : '<div></div>'
+        );
+
+        /*
+         * Cellules de chaque journée
+         */
+        for (let day = 1; day <= state.days; day++) {
+
+            const cellKey = key(row.slot, day);
+            const item = state.schedule.cells[cellKey] || normalizeCell({});
+
+            const course = getCourse(item.courseId);
+            const group = getGroup(item.groupId);
 
             /*
-             * Les boutons + AM/PM continuent d'exister
-             * pour l'interface actuelle.
+             * Couleur du groupe selon le mode
              */
-            const addTarget =
-                row.type === 'course' &&
-                    row.slot.startsWith('am')
-                    ? 'am'
-                    : row.type === 'course'
-                        ? 'pm'
-                        : '';
+            let groupColorStyle = '';
+            let groupColorClass = '';
 
+            if (group && group.color) {
+                if (item.groupColorMode === 'dot') {
+                    groupColorClass = 'group-dot';
+                    groupColorStyle = `background:${group.color}`;
+                }
+                if (item.groupColorMode === 'border') {
+                    groupColorClass = 'group-border';
+                    groupColorStyle = `border-color:${group.color}`;
+                }
+                if (item.groupColorMode === 'background') {
+                    groupColorClass = 'group-bg';
+                    groupColorStyle = `background:${group.color}22`;
+                }
+            }
+
+            /*
+             * Alignement du texte
+             */
+            const alignClass = item.text?.align
+                ? `align-${item.text.align}`
+                : 'align-top-left';
+
+            /*
+             * Couleur du texte
+             */
+            const textColorStyle = item.text?.color
+                ? `color:${item.text.color};`
+                : '';
+
+            /*
+             * Contenu de la cellule
+             */
+            let content = '';
+
+            if (row.type === 'lunch') {
+
+                content = `
+                    <div class="cell-content">
+                        <span class="group-text">${item.note || row.label || 'Dîner'}</span>
+                    </div>
+                    <span class="lunch-icon">${lunchIcons[(day - 1) % lunchIcons.length]}</span>
+                `;
+
+            } else if (row.type === 'recess') {
+
+                content = `
+                    <div class="cell-content">
+                        <span class="group-text">${item.note || 'Récréation'}</span>
+                    </div>
+                `;
+
+            } else {
+
+                content = `
+                    <div class="cell-content">
+
+                        ${group ? `
+                            <span class="group-badge ${groupColorClass}" style="${groupColorStyle}"></span>
+                        ` : ''}
+
+                        ${course ? `
+                            <span class="course-pill"
+                                style="background:${course.color};border-color:${course.color}">
+                                ${course.name}
+                            </span>
+                        ` : ''}
+
+                        ${group ? `
+                            <span class="group-text">${group.name}</span>
+                        ` : ''}
+
+                        ${item.room ? `
+                            <span class="room-text">Local : ${item.room}</span>
+                        ` : ''}
+
+                        ${item.note ? `
+                            <span class="note-text">${item.note}</span>
+                        ` : ''}
+
+                    </div>
+                `;
+            }
+
+            /*
+             * Affichage de l'heure
+             */
+            const timeLabel = state.hours
+                ? `<span class="time-label">${item.time || row.defaultTime || hourFor(rowIndex)}</span>`
+                : '';
+
+            /*
+             * Construction finale de la cellule
+             */
             grid.insertAdjacentHTML(
                 'beforeend',
-
-                addTarget
-                    ? `
-            <button
-              class="row-add"
-              data-add="${addTarget}"
-              title="Ajouter un cours"
-            >
-              +
-            </button>
-          `
-                    : '<div></div>'
-            );
-
-
-            /*
-             * Cellules de chaque journée.
-             */
-            for (
-                let day = 1;
-                day <= state.days;
-                day++
-            ) {
-
-                const cellKey =
-                    key(
-                        row.slot,
-                        day
-                    );
-
-                /*
-                 * On lit désormais le nouveau modèle.
-                 */
-                const item =
-                    state.schedule.cells[cellKey] ||
-                    {};
-
-                const course =
-                    getCourse(
-                        item.courseId
-                    );
-
-                const group =
-                    getGroup(
-                        item.groupId
-                    );
-
-
-                /*
-                 * Couleur du cours.
-                 */
-                const style =
-                    course
-                        ? `style="--course-color:${course.color}"`
-                        : '';
-
-
-                const classes = [
-                    row.type === 'lunch'
-                        ? 'lunch-cell'
-                        : '',
-
-                    course
-                        ? 'course-filled'
-                        : ''
-                ]
-                    .filter(Boolean)
-                    .join(' ');
-
-
-                /*
-                 * Contenu d'un dîner.
-                 */
-                const content =
-                    row.type === 'lunch'
-
-                        ? `
-              <div class="cell-content">
-
-                <span class="group-text">
-                  ${row.label || 'Dîner'}
-                </span>
-
-              </div>
-
-              <span class="lunch-icon">
-                ${lunchIcons[
-                        (day - 1) %
-                        lunchIcons.length
-                        ]}
-              </span>
-            `
-
-                        :
-
-                        /*
-                         * Contenu d'une case normale.
-                         */
-                        `
-              <div class="cell-content">
-
-                ${course
-                            ? `
-                      <span
-                        class="course-pill"
-                        style="
-                          background:${course.color};
-                          border-color:${course.color}
-                        "
-                      >
-                        ${course.name}
-                      </span>
-                    `
-                            : ''
-                        }
-
-                ${group
-                            ? `
-                      <span class="group-text">
-                        ${group.name}
-                      </span>
-                    `
-                            : ''
-                        }
-
-                ${item.room
-                            ? `
-                      <span class="room-text">
-                        Local : ${item.room}
-                      </span>
-                    `
-                            : ''
-                        }
-
-                ${item.note
-                            ? `
-                      <span class="note-text">
-                        ${item.note}
-                      </span>
-                    `
-                            : ''
-                        }
-
-              </div>
-            `;
-
-
-                /*
-                 * Affichage de la cellule.
-                 */
-                grid.insertAdjacentHTML(
-                    'beforeend',
-
-                    `
-          <button
-            class="cell ${classes}"
-            data-cell="${cellKey}"
-            ${row.type === 'lunch'
-                        ? 'data-lunch="true"'
-                        : ''
-                    }
-            ${style}
-          >
-
-            <span class="placeholder">
-              ${row.label}
-            </span>
-
-            ${content}
-
-            ${state.hours
-                        ? `
-                  <span class="time-label">
-                    ${item.time ||
-                        row.defaultTime ||
-                        hourFor(rowIndex)
-                        }
-                  </span>
                 `
-                        : ''
-                    }
-
-          </button>
-          `
-                );
-            }
-        }
-    );
-
-
-    /*
-     * Boutons d'ajout AM/PM.
-     */
-    $$('.row-add').forEach(
-        button => {
-
-            button.addEventListener(
-                'click',
-                () => {
-
-                    if (
-                        button.dataset.add === 'am'
-                    ) {
-
-                        state.am =
-                            Math.min(
-                                5,
-                                state.am + 1
-                            );
-                    }
-
-                    if (
-                        button.dataset.add === 'pm'
-                    ) {
-
-                        state.pm =
-                            Math.min(
-                                5,
-                                state.pm + 1
-                            );
-                    }
-
-                    rebuildScheduleRows();
-
-                    persist();
-
-                    syncControls();
-
-                    renderGrid();
-                }
+                <button
+                    class="cell ${alignClass}"
+                    data-cell="${cellKey}"
+                    data-type="${row.type}"
+                    style="${textColorStyle}"
+                >
+                    ${content}
+                    ${timeLabel}
+                </button>
+                `
             );
         }
-    );
-
+    });
 
     /*
-     * Ouverture d'une case.
+     * Drag & drop
      */
-    $$('[data-cell]').forEach(
-        cell => {
+    $$('[data-cell]').forEach(cell => {
+        cell.draggable = true;
 
-            cell.addEventListener(
-                'click',
-                () => {
+        cell.addEventListener('dragstart', handleDragStart);
+        cell.addEventListener('dragover', handleDragOver);
+        cell.addEventListener('dragleave', handleDragLeave);
+        cell.addEventListener('drop', handleDrop);
+        cell.addEventListener('dragend', handleDragEnd);
 
-                    openCellDialog(
-                        cell.dataset.cell,
-                        cell.dataset.lunch === 'true'
-                    );
+        cell.addEventListener('click', () => {
+            openCellDialog(cell.dataset.cell, cell.dataset.type === 'lunch');
+        });
+    });
 
-                }
-            );
+    /*
+     * Boutons d'ajout AM/PM
+     */
+    $$('.row-add').forEach(button => {
+        button.addEventListener('click', () => {
+            if (button.dataset.add === 'am') state.am = Math.min(5, state.am + 1);
+            if (button.dataset.add === 'pm') state.pm = Math.min(5, state.pm + 1);
 
-        }
-    );
+            rebuildScheduleRows();
+            persist();
+            syncControls();
+            renderGrid();
+        });
+    });
 }
+/* ============================================================
+ * DRAG & DROP V2 — Compatible modèle v2
+ * ============================================================
+ */
+
+let dragSourceKey = null;
+
+/*
+ * Début du drag
+ */
+function handleDragStart(e) {
+    const cell = e.currentTarget;
+    dragSourceKey = cell.dataset.cell;
+
+    cell.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+/*
+ * Survol d’une autre cellule
+ */
+function handleDragOver(e) {
+    e.preventDefault();
+    const cell = e.currentTarget;
+
+    if (cell.dataset.cell !== dragSourceKey) {
+        cell.classList.add('drop-target');
+    }
+}
+
+/*
+ * Quitte une cellule
+ */
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drop-target');
+}
+
+/*
+ * Drop final : échange des cases
+ */
+function handleDrop(e) {
+    e.preventDefault();
+
+    const targetCell = e.currentTarget;
+    const targetKey = targetCell.dataset.cell;
+
+    targetCell.classList.remove('drop-target');
+
+    if (!dragSourceKey || dragSourceKey === targetKey) return;
+
+    // Lecture des deux cases
+    const sourceData = state.schedule.cells[dragSourceKey] || null;
+    const targetData = state.schedule.cells[targetKey] || null;
+
+    // Échange
+    state.schedule.cells[dragSourceKey] = targetData;
+    state.schedule.cells[targetKey] = sourceData;
+
+    // Alias compatibilité
+    state.data = state.schedule.cells;
+
+    persist();
+    renderGrid();
+}
+
+/*
+ * Fin du drag
+ */
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    dragSourceKey = null;
+
+    $$('.drop-target').forEach(el => el.classList.remove('drop-target'));
+}
+
 function syncControls(){
   if($('#amCount')) $('#amCount').value = state.am;
   if($('#pmCount')) $('#pmCount').value = state.pm;
@@ -1106,48 +1132,49 @@ function syncControls(){
   if($('#lunchToggle')) $('#lunchToggle').checked = state.lunch;
   if($('#hoursToggle')) $('#hoursToggle').checked = state.hours;
 }
-function openCellDialog(
-    cellKey,
-    isLunch
-) {
+function openCellDialog(cellKey, isLunch) {
 
-    /*
-     * Pour cette phase, le dîner
-     * reste non éditable directement.
-     *
-     * La personnalisation du dîner
-     * arrive en Phase 2.
-     */
-    if (
-        isLunch ||
-        !$('#cellDialog')
-    ) {
-        return;
-    }
+    if (!$('#cellDialog')) return;
 
     populateDialogOptions();
 
-    const item =
-        state.schedule.cells[cellKey] ||
-        {};
+    const item = state.schedule.cells[cellKey] || normalizeCell({});
+    $('#editingKey').value = cellKey;
 
-    $('#editingKey').value =
-        cellKey;
+    // Cours
+    $('#cellCourse').value = item.courseId || '';
 
-    $('#cellCourse').value =
-        item.courseId || '';
+    // Groupe
+    $('#cellGroup').value = item.groupId || '';
 
-    $('#cellGroup').value =
-        item.groupId || '';
+    // Salle
+    $('#cellRoom').value = item.room || '';
 
-    $('#cellRoom').value =
-        item.room || '';
+    // Heure
+    $('#cellTime').value = item.time || '';
 
-    $('#cellTime').value =
-        item.time || '';
+    // Note
+    $('#cellNote').value = item.note || '';
 
-    $('#cellNote').value =
-        item.note || '';
+    // Type de case
+    $('#cellType').value = item.type || 'course';
+
+    // Alignement du texte
+    $('#cellTextAlign').value = item.text?.align || 'top-left';
+
+    // Couleur du texte
+    $('#cellTextColor').value = item.text?.color || '#000000';
+
+    // Mode de couleur du groupe
+    $('#cellGroupColorMode').value = item.groupColorMode || 'dot';
+
+    // Pastille de couleur du groupe dans le dialog
+    const group = getGroup(item.groupId);
+    const badge = $('#cellGroupColorBadge');
+    if (badge) {
+        badge.style.background = group?.color || '#ccc';
+        badge.style.display = group ? 'inline-block' : 'none';
+    }
 
     $('#cellDialog').showModal();
 }
@@ -1456,52 +1483,45 @@ function bindBuilder() {
      * ==========================================================
      */
 
-    $('#cellForm')?.addEventListener(
-        'submit',
-        e => {
+$('#cellForm')?.addEventListener('submit', e => {
+    e.preventDefault();
 
-            e.preventDefault();
+    const cellKey = $('#editingKey').value;
 
-            const cellKey =
-                $('#editingKey').value;
+    const courseId = $('#cellCourse').value;
+    const groupId = $('#cellGroup').value;
+    const room = $('#cellRoom').value.trim();
+    const time = $('#cellTime').value;
+    const note = $('#cellNote').value.trim();
+    const type = $('#cellType').value;
+    const textAlign = $('#cellTextAlign').value;
+    const textColor = $('#cellTextColor').value;
+    const groupColorMode = $('#cellGroupColorMode').value;
 
-            state.schedule.cells[cellKey] =
-                normalizeCell({
-
-                    courseId:
-                        $('#cellCourse').value,
-
-                    groupId:
-                        $('#cellGroup').value,
-
-                    room:
-                        $('#cellRoom')
-                            .value
-                            .trim(),
-
-                    time:
-                        $('#cellTime').value,
-
-                    note:
-                        $('#cellNote')
-                            .value
-                            .trim()
-                });
-
-
-            /*
-             * Maintien de l'ancien alias.
-             */
-            state.data =
-                state.schedule.cells;
-
-            persist();
-
-            $('#cellDialog').close();
-
-            renderGrid();
+    const normalized = normalizeCell({
+        courseId,
+        groupId,
+        room,
+        time,
+        note,
+        type,
+        groupColorMode,
+        text: {
+            align: textAlign,
+            color: textColor,
+            wrap: true,
+            showGenericLabel: false
         }
-    );
+    });
+
+    state.schedule.cells[cellKey] = normalized;
+    state.data = state.schedule.cells;
+
+    persist();
+    $('#cellDialog').close();
+    renderGrid();
+});
+
 
 
     /*
@@ -1510,28 +1530,16 @@ function bindBuilder() {
      * ==========================================================
      */
 
-    $('#deleteCell')?.addEventListener(
-        'click',
-        () => {
+    $('#deleteCell')?.addEventListener('click', () => {
+    const cellKey = $('#editingKey').value;
 
-            const cellKey =
-                $('#editingKey').value;
+    delete state.schedule.cells[cellKey];
+    state.data = state.schedule.cells;
 
-            delete state.schedule.cells[
-                cellKey
-            ];
-
-            state.data =
-                state.schedule.cells;
-
-            persist();
-
-            $('#cellDialog').close();
-
-            renderGrid();
-        }
-    );
-
+    persist();
+    $('#cellDialog').close();
+    renderGrid();
+});
 
     /*
      * ==========================================================

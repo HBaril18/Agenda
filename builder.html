@@ -1,1 +1,248 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PlanifProf | Horaire</title><link rel="stylesheet" href="styles.css"></head><body data-page="builder"><header class="site-header"><a class="brand" href="index.html"><span>✦</span> PlanifProf</a><nav class="main-nav"><a class="active" href="builder.html">Construire l’horaire</a><a href="bibliotheque.html">Bibliothèque</a><a href="groupes.html">Groupes</a><a href="certificats.html">Certificats</a><a href="contact.html">Nous contacter</a></nav><button id="generateBtn" class="header-cta">PDF / Imprimer</button></header><main class="page-shell wide"><div class="page-title"><p class="eyebrow">Builder d’horaire</p><h1>Construire l’horaire</h1></div><section class="builder-panel"><div class="builder-header"><div class="control-card"><h2>Cours</h2><div class="course-controls"><label>AM<select id="amCount"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label><label>PM<select id="pmCount"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label></div><label class="check"><input id="lunchToggle" type="checkbox" checked> Dîners</label></div><div class="control-card title-card"><h2>Horaire</h2><input id="schoolName" value="École du bonheur"><input id="calendarTitle" value="Calendrier scolaire 2026-2027"><input id="teacherName" value="Nom de l’enseignant"></div><div class="control-card options-only"><h2>Options</h2><label class="check hours-check"><span>Heures</span><input id="hoursToggle" type="checkbox"></label></div><div class="action-card"><button id="printBtn" class="generate-btn">GÉNÉRER<br><span>PDF ↓</span></button><button id="clearGrid" class="print-btn">Vider la grille</button></div></div><div class="theme-strip"><button class="theme active forest" data-theme="forest">Forêt boréale</button><button class="theme aurora" data-theme="aurora">Aurore</button><button class="theme chalk" data-theme="chalk">Craie pastel</button><button class="theme camp" data-theme="camp">Camp nordique</button><button class="theme sky" data-theme="sky">Ciel clair</button><button class="theme clay" data-theme="clay">Terra</button></div><div class="theme-editor" id="themeEditor"><div class="theme-editor-top"><button id="toggleThemeEditor" class="link-btn" type="button">Fermer</button></div><div class="theme-options"><label>Font<select id="themeFont"><option value="Inter, system-ui, sans-serif">Net</option><option value="Georgia, serif">Classique</option><option value="Trebuchet MS, sans-serif">Arrondi</option><option value="Courier New, monospace">Cahier</option></select></label><label>Ligne<select id="themeLine"><option value="solid">Continue</option><option value="dashed">Pointillée</option><option value="double">Double</option></select></label><label>Couleur<input id="themeAccent" type="color" value="#2f8f61"></label><label>Texture<select id="themeTexture"><option value="none">Aucune</option><option value="paper">Papier doux</option><option value="grid">Quadrillé</option><option value="dots">Petits points</option></select></label><label>Imperfections<select id="themeImperfections"><option value="clean">Propre</option><option value="soft">Bords doux</option><option value="ink">Encre légère</option></select></label><label>Entête<select id="themeHeader"><option value="simple">Simple</option><option value="banner">Bandeau</option><option value="badge">Badge</option></select></label><label>Fond<select id="themeBackground"><option value="#ffffff">Blanc</option><option value="#f6fbff">Bleu très pâle</option><option value="#fff8f1">Crème</option><option value="#f5fbf3">Vert doux</option></select></label><label>Palette<select id="themePalette"><option value="forest">Forêt</option><option value="aurora">Aurore</option><option value="pastel">Pastel</option><option value="earth">Terre</option></select></label></div><button id="previewTheme" class="generate-btn theme-preview-btn" type="button">VOIR<br><span>👁</span></button></div><div class="builder-tools"><label>Nombre de jours <input id="dayCount" type="range" min="5" max="10" value="9"> <span id="dayCountLabel">9 jours</span></label><button id="quickFill" class="btn btn-soft">Remplissage rapide</button><button id="saveLocal" class="btn btn-soft">Sauvegarder</button><button id="loadLocal" class="btn btn-soft">Charger</button></div><div class="print-header"><div class="print-brand-mark">✦</div><div><p class="print-label">Horaire scolaire</p><h1 id="printSchoolName">École du bonheur</h1></div><div class="print-meta"><span id="printCalendarTitle">Calendrier scolaire 2026-2027</span><strong id="printTeacherName">Nom de l’enseignant</strong></div></div><div class="schedule-wrapper" id="scheduleWrapper"><div id="scheduleGrid" class="schedule-grid"></div></div><div class="print-footer"><span>PlanifProf</span><span>Document généré pour usage pédagogique.</span></div></section></main><dialog id="cellDialog" class="cell-dialog"><form method="dialog" id="cellForm"><div class="dialog-head"><h3>Modifier la case</h3><button value="cancel" class="icon-btn">×</button></div><input type="hidden" id="editingKey"><div class="dialog-grid"><label>Cours<select id="cellCourse"></select></label><label>Groupe<select id="cellGroup"></select></label><label>Salle / local<input id="cellRoom"></label><label>Heure<input id="cellTime" type="time"></label></div><label>Note<textarea id="cellNote"></textarea></label><div class="dialog-actions"><button id="deleteCell" type="button" class="btn btn-danger">Vider</button><button value="cancel" class="btn btn-soft">Annuler</button><button id="saveCell" type="submit" class="btn">Enregistrer</button></div></form></dialog><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js"></script><script src="script.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlanifProf | Horaire</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="builder">
+    <header class="site-header">
+        <a class="brand" href="index.html"><span>✦</span> PlanifProf</a>
+        <nav class="main-nav">
+            <a class="active" href="builder.html">Construire l’horaire</a>
+            <a href="bibliotheque.html">Bibliothèque</a><a href="groupes.html">Groupes</a>
+            <a href="certificats.html">Certificats</a><a href="contact.html">Nous contacter</a>
+        </nav><button id="generateBtn" class="header-cta">PDF / Imprimer</button>
+    </header>
+    <main class="page-shell wide">
+        <div class="page-title">
+            <p class="eyebrow">Builder d’horaire</p>
+            <h1>Construire l’horaire</h1>
+        </div><section class="builder-panel">
+            <div class="builder-header">
+                <div class="control-card">
+                    <h2>Cours</h2>
+                    <div class="course-controls">
+                        <label>
+                            AM<select id="amCount">
+                                <option>1</option>
+                                <option selected>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                                <option>5</option>
+                            </select>
+                        </label>
+                        <label>
+                            PM<select id="pmCount">
+                                <option>1</option>
+                                <option selected>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                                <option>5</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="check">
+                        <input id="lunchToggle" type="checkbox" checked> Dîners
+                    </label>
+                </div>
+                <div class="control-card title-card">
+                    <h2>Horaire</h2>
+                    <input id="schoolName" value="École du bonheur">
+                    <input id="calendarTitle" value="Calendrier scolaire 2026-2027">
+                    <input id="teacherName" value="Nom de l’enseignant">
+                </div>
+                <div class="control-card options-only">
+                    <h2>Options</h2>
+                    <label class="check hours-check">
+                        <span>Heures</span><input id="hoursToggle" type="checkbox">
+                    </label>
+                </div>
+                <div class="action-card">
+                    <button id="printBtn" class="generate-btn">GÉNÉRER<br><span>PDF ↓</span></button>
+                    <button id="clearGrid" class="print-btn">Vider la grille</button>
+                </div>
+            </div>
+            <div class="theme-strip">
+                <button class="theme active forest" data-theme="forest">Forêt boréale</button>
+                <button class="theme aurora" data-theme="aurora">Aurore</button>
+                <button class="theme chalk" data-theme="chalk">Craie pastel</button>
+                <button class="theme camp" data-theme="camp">Camp nordique</button>
+                <button class="theme sky" data-theme="sky">Ciel clair</button>
+                <button class="theme clay" data-theme="clay">Terra</button>
+            </div>
+            <div class="theme-editor" id="themeEditor">
+                <div class="theme-editor-top">
+                    <button id="toggleThemeEditor" class="link-btn" type="button">Fermer</button>
+                </div>
+                <div class="theme-options">
+                    <label>
+                        Font<select id="themeFont">
+                            <option value="Inter, system-ui, sans-serif">Net</option>
+                            <option value="Georgia, serif">Classique</option>
+                            <option value="Trebuchet MS, sans-serif">Arrondi</option>
+                            <option value="Courier New, monospace">Cahier</option>
+                        </select>
+                    </label>
+                    <label>
+                        Ligne<select id="themeLine">
+                            <option value="solid">Continue</option>
+                            <option value="dashed">Pointillée</option>
+                            <option value="double">Double</option>
+                        </select>
+                    </label>
+                    <label>Couleur<input id="themeAccent" type="color" value="#2f8f61"></label>
+                    <label>
+                        Texture<select id="themeTexture">
+                            <option value="none">Aucune</option>
+                            <option value="paper">Papier doux</option>
+                            <option value="grid">Quadrillé</option>
+                            <option value="dots">Petits points</option>
+                        </select>
+                    </label><label>
+                        Imperfections<select id="themeImperfections">
+                            <option value="clean">Propre</option>
+                            <option value="soft">Bords doux</option>
+                            <option value="ink">Encre légère</option>
+                        </select>
+                    </label>
+                    <label>
+                        Entête<select id="themeHeader">
+                            <option value="simple">Simple</option>
+                            <option value="banner">Bandeau</option>
+                            <option value="badge">Badge</option>
+                        </select>
+                    </label>
+                    <label>
+                        Fond<select id="themeBackground">
+                            <option value="#ffffff">Blanc</option>
+                            <option value="#f6fbff">Bleu très pâle</option>
+                            <option value="#fff8f1">Crème</option>
+                            <option value="#f5fbf3">Vert doux</option>
+                        </select>
+                    </label><label>
+                        Palette<select id="themePalette">
+                            <option value="forest">Forêt</option>
+                            <option value="aurora">Aurore</option>
+                            <option value="pastel">Pastel</option>
+                            <option value="earth">Terre</option>
+                        </select>
+                    </label>
+                </div>
+                <button id="previewTheme" class="generate-btn theme-preview-btn" type="button">
+                    VOIR<br>
+                    <span>👁</span>
+                </button>
+            </div>
+            <div class="builder-tools">
+                <label>
+                    Nombre de jours <input id="dayCount" type="range" min="5" max="10" value="9">
+                    <span id="dayCountLabel">9 jours</span>
+                </label>
+                <button id="quickFill" class="btn btn-soft">Remplissage rapide</button>
+                <button id="saveLocal" class="btn btn-soft">Sauvegarder</button>
+                <button id="loadLocal" class="btn btn-soft">Charger</button>
+            </div>
+            <div class="print-header">
+                <div class="print-brand-mark">✦</div>
+                <div>
+                    <p class="print-label">Horaire scolaire</p>
+                    <h1 id="printSchoolName">École du bonheur</h1>
+                </div>
+                <div class="print-meta">
+                    <span id="printCalendarTitle">Calendrier scolaire 2026-2027</span>
+                    <strong id="printTeacherName">Nom de l’enseignant</strong>
+                </div>
+            </div>
+            <div class="schedule-wrapper" id="scheduleWrapper">
+                <div id="scheduleGrid" class="schedule-grid"></div>
+            </div>
+            <div class="print-footer">
+                <span>PlanifProf</span><span>Document généré pour usage pédagogique.</span>
+            </div>
+        </section>
+    </main>
+    <dialog id="cellDialog" class="cell-dialog">
+        <form method="dialog" id="cellForm">
+            <div class="dialog-head">
+                <h3>Modifier la case</h3>
+                <button value="cancel" class="icon-btn">×</button>
+            </div>
+
+            <input type="hidden" id="editingKey">
+
+            <!-- Bloc existant -->
+            <div class="dialog-grid">
+                <label>
+                    Cours
+                    <select id="cellCourse"></select>
+                </label>
+
+                <label>
+                    Groupe
+                    <select id="cellGroup"></select>
+                </label>
+
+                <label>
+                    Salle / local
+                    <input id="cellRoom">
+                </label>
+
+                <label>
+                    Heure
+                    <input id="cellTime" type="time">
+                </label>
+            </div>
+
+            <label>
+                Note
+                <textarea id="cellNote"></textarea>
+            </label>
+
+            <!-- 🔥 NOUVEAU BLOC À AJOUTER ICI -->
+            <div class="dialog-grid">
+
+                <label>
+                    Type de case
+                    <select id="cellType"></select>
+                </label>
+
+                <label>
+                    Alignement du texte
+                    <select id="cellTextAlign"></select>
+                </label>
+
+                <label>
+                    Couleur du texte
+                    <input id="cellTextColor" type="color" value="#000000">
+                </label>
+
+                <label>
+                    Mode de couleur du groupe
+                    <select id="cellGroupColorMode"></select>
+                </label>
+
+                <label>
+                    Pastille du groupe
+                    <span id="cellGroupColorBadge"
+                          style="width:16px;height:16px;border-radius:999px;display:inline-block;background:#ccc;">
+                    </span>
+                </label>
+
+            </div>
+            <!-- 🔥 FIN DU NOUVEAU BLOC -->
+
+            <div class="dialog-actions">
+                <button id="deleteCell" type="button" class="btn btn-danger">Vider</button>
+                <button value="cancel" class="btn btn-soft">Annuler</button>
+                <button id="saveCell" type="submit" class="btn">Enregistrer</button>
+            </div>
+        </form>
+    </dialog>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
+

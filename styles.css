@@ -2519,3 +2519,78 @@ body[data-page="groups"] .page-title h1 {
         font-size: 5.3pt !important;
     }
 }
+
+.group-color-badge {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-top: 6px;
+}
+
+.group-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.group-border {
+    border: 3px solid;
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.group-bg {
+    background: rgba(0,0,0,0.08);
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.align-top-left {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+.align-top-right {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+}
+
+.align-bottom-left {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+}
+
+.align-bottom-right {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+}
+
+.align-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.row-hour-input {
+    width: 100%;
+    border: 1px solid #cfd6e1;
+    border-radius: 6px;
+    padding: 4px;
+    font-size: .85rem;
+}
+.cell.dragging {
+    opacity: 0.45;
+    outline: 2px dashed #70c85d;
+}
+
+.cell.drop-target {
+    outline: 3px solid #2f8f61;
+    background: rgba(47,143,97,0.08);
+}
