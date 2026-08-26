@@ -1583,30 +1583,6 @@ function bindBuilder() {
     );
 
 
-    $('#previewTheme')?.addEventListener(
-        'click',
-        () => {
-
-            applyTheme(
-                currentThemeValues()
-            );
-
-            $('#scheduleWrapper')
-                ?.classList
-                .add('theme-flash');
-
-            setTimeout(
-                () =>
-                    $('#scheduleWrapper')
-                        ?.classList
-                        .remove(
-                            'theme-flash'
-                        ),
-                650
-            );
-        }
-    );
-
 
     $('#toggleThemeEditor')
         ?.addEventListener(

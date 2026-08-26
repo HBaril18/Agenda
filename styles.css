@@ -202,9 +202,7 @@
   max-width: 1120px;
   text-align: center;
 }
-.theme-editor.collapsed .theme-options,
-.theme-editor.collapsed .theme-note,
-.theme-editor.collapsed .theme-preview-btn {
+.theme-editor.collapsed .theme-options {
   display: none;
 }
 .theme-editor-top {
@@ -240,14 +238,6 @@
   border-radius: 8px;
   padding: 6px 8px;
   background: #fff;
-}
-.theme-note {
-  margin: 12px 0 16px;
-  color: #667085;
-}
-.theme-preview-btn {
-  min-width: 140px;
-  margin: auto;
 }
 .schedule-grid {
   grid-template-columns: 28px repeat(var(--days, 9), minmax(132px, 1fr));
@@ -632,8 +622,6 @@
 .course-filled .cell-content,
 .course-filled .placeholder,
 .course-filled .time-label { position: relative; z-index: 1; }
-.theme-flash { animation: themePulse .65s ease; }
-@keyframes themePulse { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 5px rgba(112,200,93,.25)} }
 .cell,
 .course-pill,
 .print-header,

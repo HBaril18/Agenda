@@ -13,3 +13,9 @@
 ## Données stockées
 
 La base Supabase est créée automatiquement et stocke les données par utilisateur : horaires, cours, groupes, élèves, plans de classe, contraintes, plans d’intervention, évaluations et résultats.
+
+## Nettoyage appliqué
+- Suppression du bouton « Voir » de l’éditeur de thème dans `builder.html`.
+- Suppression du gestionnaire JavaScript associé au bouton supprimé.
+- Suppression des styles et de l’animation devenus inutiles.
+- Conservation du reste de la logique afin d’éviter de casser la compatibilité avec les données existantes.
