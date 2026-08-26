@@ -794,6 +794,17 @@ function populateDialogOptions() {
                     ${g.name}
                 </option>`
             ).join('');
+        // Mettre à jour la pastille couleur lorsque l'utilisateur change de groupe
+        const _sel = $('#cellGroup');
+        if(_sel){
+            _sel.onchange = () => {
+                const opt = _sel.options[_sel.selectedIndex];
+                const badge = $('#cellGroupColorBadge');
+                if (!badge) return;
+                badge.style.background = opt?.dataset?.color || '#ccc';
+                badge.style.display = opt && opt.value ? 'inline-block' : 'none';
+            };
+        }
     }
 
     if ($('#cellGroupColorMode')) {
@@ -1682,12 +1693,21 @@ function renderGroupWorkspace(){
   if(!state.groups.length){ $('#groupTabs').innerHTML = '<li>Aucun groupe</li>'; return; }
   if(!state.selectedGroupId || !getGroup(state.selectedGroupId)) state.selectedGroupId = state.groups[0].id;
   const group = getGroup(state.selectedGroupId);
-  $('#groupTabs').innerHTML = state.groups.map(g => `<li><button class="${g.id === state.selectedGroupId ? 'active' : ''}" data-select-group="${g.id}">${g.name}<br><small>${g.level || 'Niveau non précisé'}</small></button></li>`).join('');
+  $('#groupTabs').innerHTML = state.groups.map(g => `
+    <li>
+      <button class="${g.id === state.selectedGroupId ? 'active' : ''}" data-select-group="${g.id}">
+        <span class="group-swatch" style="display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:8px;background:${g.color || '#4f7cff'}"></span>
+        ${g.name}<br><small>${g.level || 'Niveau non précisé'}</small>
+      </button>
+    </li>
+  `).join('');
   $('#groupEditorTitle').textContent = `Détails - ${group.name}`;
   $('#editGroupName').value = group.name || '';
   $('#editGroupLevel').value = group.level || '';
   $('#editGroupTeacher').value = group.teacher || '';
   $('#editGroupRoom').value = group.room || '';
+  // Couleur du groupe (nouveau champ)
+  if($('#editGroupColor')) $('#editGroupColor').value = group.color || '#4f7cff';
   $('#editGroupNotes').value = group.notes || '';
   renderGroupStudents();
   $$('[data-select-group]').forEach(b => b.onclick = () => { state.selectedGroupId = b.dataset.selectGroup; persist(); renderGroupWorkspace(); });
@@ -1737,6 +1757,21 @@ function bindGroups(){
             renderGroupWorkspace();
         }
     );
+    // Enregistrer les détails du groupe (y compris la couleur)
+    $('#saveGroupDetails')?.addEventListener('click', () => {
+        const group = getGroup(state.selectedGroupId);
+        if(!group) return;
+        group.name = $('#editGroupName').value.trim();
+        group.level = $('#editGroupLevel').value.trim();
+        group.teacher = $('#editGroupTeacher').value.trim();
+        group.room = $('#editGroupRoom').value.trim();
+        group.notes = $('#editGroupNotes').value.trim();
+        const colorField = $('#editGroupColor');
+        if(colorField) group.color = colorField.value || group.color || '#4f7cff';
+        persist();
+        renderGroupWorkspace();
+        renderGrid();
+    });
   $('#deleteGroupBtn')?.addEventListener('click', () => { const id = state.selectedGroupId; state.groups = state.groups.filter(g => g.id !== id); state.students = state.students.filter(s => s.groupId !== id); Object.values(state.data).forEach(cell => { if(cell.groupId === id) cell.groupId = ''; }); state.selectedGroupId = state.groups[0]?.id || ''; persist(); renderGroupWorkspace(); });
   $('#addStudentToGroup')?.addEventListener('click', () => { const name = $('#newStudentName').value.trim(); if(!name || !state.selectedGroupId) return; state.students.push({id:makeId('s'), name, groupId:state.selectedGroupId, info:$('#newStudentInfo').value.trim()}); $('#newStudentName').value=''; $('#newStudentInfo').value=''; persist(); renderGroupStudents(); });
 }
