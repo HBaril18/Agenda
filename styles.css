@@ -2280,10 +2280,7 @@ body[data-page="groups"] .page-title h1 {
     background: color-mix( in srgb, var(--group-color, #70c85d) 7%, #fff ) !important;
 }
 
-/* Pastille couleur dans l'interface des groupes */
-.group-swatch {
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.05) inset;
-}
+/* (Aucune règle d'affichage spécifique ajoutée pour les groupes afin de préserver le style existant) */
 
 /* ------------------------------------------------------------
    DÎNER

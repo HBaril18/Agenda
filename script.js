@@ -1669,14 +1669,7 @@ function renderGroupWorkspace(){
   if(!state.groups.length){ $('#groupTabs').innerHTML = '<li>Aucun groupe</li>'; return; }
   if(!state.selectedGroupId || !getGroup(state.selectedGroupId)) state.selectedGroupId = state.groups[0].id;
   const group = getGroup(state.selectedGroupId);
-  $('#groupTabs').innerHTML = state.groups.map(g => `
-    <li>
-      <button class="${g.id === state.selectedGroupId ? 'active' : ''}" data-select-group="${g.id}">
-        <span class="group-swatch" style="display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:8px;background:${g.color || '#4f7cff'}"></span>
-        ${g.name}<br><small>${g.level || 'Niveau non précisé'}</small>
-      </button>
-    </li>
-  `).join('');
+  $('#groupTabs').innerHTML = state.groups.map(g => `<li><button class="${g.id === state.selectedGroupId ? 'active' : ''}" data-select-group="${g.id}">${g.name}<br><small>${g.level || 'Niveau non précisé'}</small></button></li>`).join('');
   $('#groupEditorTitle').textContent = `Détails - ${group.name}`;
   $('#editGroupName').value = group.name || '';
   $('#editGroupLevel').value = group.level || '';
